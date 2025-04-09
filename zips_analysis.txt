@@ -1,0 +1,16 @@
+Excel file shape: (156, 4)
+Excel file columns: ['zip', 'ratedesc', 'mailday', 'truckload']
+
+First 5 rows:
+     zip ratedesc mailday truckload
+0  11703      DDU     MON     CBAM1
+1  11729      DDU     MON     CBAM1
+2  11795      DDU     MON     CBAM1
+3  11798      DDU     MON     CBAM1
+4  11720      DDU     MON    CBAM10
+
+Sample values for each column:
+zip: [11703, 11729, 11795, 11798, 11720]
+ratedesc: ['DDU', 'SCF']
+mailday: ['MON', 'TUE']
+truckload: ['CBAM1', 'CBAM10', 'CBAM2', 'CBAM3', 'CBAM4']

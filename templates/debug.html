@@ -1,0 +1,48 @@
+{% extends 'base.html' %}
+
+{% block title %}Debug Information{% endblock %}
+
+{% block content %}
+<div class="container">
+    <h1>Debug Information</h1>
+    
+    <h2>Machine: {{ machine_name }}</h2>
+    
+    <h3>Assignments Data</h3>
+    <pre id="assignments-data">
+    </pre>
+    
+    <h3>ZIP Codes with Segments</h3>
+    <ul>
+    {% for zip_data in assignments %}
+        <li>
+            <strong>ZIP {{ zip_data.zip_code }}</strong>
+            <ul>
+                <li>Segments ({{ zip_data.segments|length }}): {{ zip_data.segments|join(', ') }}</li>
+                <li>Inserts reused: {{ zip_data.inserts_reused }}</li>
+            </ul>
+        </li>
+    {% endfor %}
+    </ul>
+</div>
+{% endblock %}
+
+{% block extra_js %}
+<script>
+    document.addEventListener('DOMContentLoaded', function() {
+        // Display assignments data
+        const assignmentsData = JSON.parse('{{ assignments|tojson }}');
+        document.getElementById('assignments-data').textContent = JSON.stringify(assignmentsData, null, 2);
+        
+        // Log to console for debugging
+        console.log('Assignments data:', assignmentsData);
+        
+        assignmentsData.forEach(assignment => {
+            console.log(`ZIP ${assignment.zip_code}:`);
+            console.log(`  Segments (${assignment.segments ? assignment.segments.length : 0}):`, 
+                       assignment.segments);
+            console.log(`  Inserts reused: ${assignment.inserts_reused}`);
+        });
+    });
+</script>
+{% endblock %} 

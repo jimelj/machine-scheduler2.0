@@ -4,36 +4,6 @@ __pycache__/
 *$py.class
 *.so
 .Python
-venv/
-venv_py310/
-ENV/
-env.bak/
-venv.bak/
-
-# Flask
-instance/
-.webassets-cache
-uploads/
-
-# IDE
-.idea/
-.vscode/
-
-# OS
-.DS_Store
-.AppleDouble
-.LSOverride
-._*
-
-# Logs
-*.log
-app_output.log
-
-# Environment variables
-.env
-.env.*
-
-# Virtual Environment
 build/
 develop-eggs/
 dist/
@@ -50,19 +20,46 @@ wheels/
 .installed.cfg
 *.egg
 
+# Virtual Environment
+venv/
+venv_py310/
+ENV/
+env/
+.env
+.venv
+env.bak/
+venv.bak/
+
 # Flask
+instance/
 .webassets-cache
+uploads/*
+!uploads/.gitkeep
 *.db
 
 # IDE
+.idea/
+.vscode/
 *.swp
 *.swo
 
+# OS
+.DS_Store
+.AppleDouble
+.LSOverride
+._*
+
+# Logs
+*.log
+app_output.log
+
 # Project specific
-uploads/*
-!uploads/.gitkeep
 schedule_result.json
 session.json
+
+# Environment variables
+.env
+.env.*
 
 # Database
 *.sqlite
