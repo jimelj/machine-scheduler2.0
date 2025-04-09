@@ -11,6 +11,8 @@ from flask import Flask, render_template, request, redirect, url_for, flash, jso
 from werkzeug.utils import secure_filename
 from datetime import datetime
 import json
+import tempfile
+import uuid
 
 from database_schema import db, ZipCode, Advertiser, Order, Machine, MachinePocket, ScheduleItem, PocketAssignment, ScheduleRun
 from scheduling_algorithm import SchedulingAlgorithm, load_and_prepare_data, schedule_machines, run_scheduling
@@ -427,6 +429,202 @@ def page_not_found(e):
 def server_error(e):
     """Handle 500 errors."""
     return render_template('500.html'), 500
+
+@app.route('/operator_report/<int:machine_id>')
+def operator_report(machine_id):
+    """Generate a printable operator report for a specific machine."""
+    try:
+        with open(os.path.join(app.config['UPLOAD_FOLDER'], 'schedule_result.json'), 'r') as f:
+            schedule_result = json.load(f)
+    except FileNotFoundError:
+        flash('No schedule has been generated yet')
+        return redirect(url_for('schedule'))
+    
+    # Get machine data
+    machine_index = machine_id - 1  # Convert from 1-based to 0-based index
+    
+    if machine_index < 0 or machine_index >= len(schedule_result['machines']):
+        flash('Invalid machine ID')
+        return redirect(url_for('view_schedule'))
+    
+    machine_data = schedule_result['machines'][machine_index]
+    
+    # Calculate total inserts for this machine
+    all_inserts_set = set()
+    
+    # Calculate reuse information for each zip code
+    for i, zip_data in enumerate(machine_data['zips']):
+        # Count inserts for this ZIP
+        if 'inserts' in zip_data and zip_data['inserts']:
+            current_inserts = set(zip_data['inserts'])
+            all_inserts_set.update(current_inserts)
+            
+        # Make sure each zip has a consistent data structure
+        if i > 0:
+            prev_inserts = set(machine_data['zips'][i-1]['inserts'])
+            curr_inserts = set(zip_data['inserts'])
+            common_inserts = prev_inserts.intersection(curr_inserts)
+            zip_data['reused_inserts'] = list(common_inserts)
+            
+            # If inserts_reused is not already in the data (from schedule output), calculate it
+            if 'inserts_reused' not in zip_data:
+                zip_data['inserts_reused'] = len(common_inserts)
+        else:
+            zip_data['reused_inserts'] = []
+            
+            # First ZIP has 0 reused inserts
+            if 'inserts_reused' not in zip_data:
+                zip_data['inserts_reused'] = 0
+        
+        # Ensure mailday is present
+        if 'mailday' not in zip_data:
+            zip_data['mailday'] = ""
+            
+        # Ensure segments is present and properly formatted
+        if 'segments' not in zip_data:
+            zip_data['segments'] = []
+        elif zip_data['segments'] is None:
+            zip_data['segments'] = []
+        else:
+            # Make sure segments are strings and filter out empty ones
+            zip_data['segments'] = [str(s) for s in zip_data['segments'] if s]
+    
+    # Final validation before sending to template
+    for zip_data in machine_data['zips']:
+        # Ensure these values are JSON serializable
+        if not isinstance(zip_data.get('segments', []), list):
+            zip_data['segments'] = []
+        if not isinstance(zip_data.get('inserts_reused', 0), (int, float)):
+            zip_data['inserts_reused'] = 0
+            
+        # Ensure mailday is properly set
+        if 'mailday' not in zip_data or not zip_data['mailday'] or zip_data['mailday'] == '-':
+            # Try to determine mailday from the ZIP code segment
+            # Many segments follow a pattern where they start with the ZIP code
+            segments = zip_data.get('segments', [])
+            if segments:
+                # Check if any segment contains "MON" or "TUE"
+                for segment in segments:
+                    if "MON" in segment.upper():
+                        zip_data['mailday'] = "MON"
+                        break
+                    elif "TUE" in segment.upper():
+                        zip_data['mailday'] = "TUE"
+                        break
+            
+            # If still not set, use a default based on ZIP code
+            # This is a fallback mechanism - even numbered ZIPs go to Monday, odd to Tuesday
+            if not zip_data.get('mailday'):
+                try:
+                    zip_num = int(zip_data['zip_code'])
+                    zip_data['mailday'] = "MON" if zip_num % 2 == 0 else "TUE"
+                except (ValueError, TypeError):
+                    # If conversion fails, set a default
+                    zip_data['mailday'] = "MON"
+        
+        # Standardize mailday format
+        if zip_data.get('mailday'):
+            mailday = zip_data['mailday'].upper().strip()
+            if mailday in ['MON', 'MONDAY', 'M']:
+                zip_data['mailday'] = 'MON'
+            elif mailday in ['TUE', 'TUESDAY', 'T']:
+                zip_data['mailday'] = 'TUE'
+        else:
+            # Make sure we always have a mailday value
+            zip_data['mailday'] = 'MON'
+    
+    # Set the total inserts count for this machine (unique inserts)
+    total_machine_inserts = len(all_inserts_set)
+    
+    # Pre-calculate all pocket changes for each ZIP
+    # This version is designed for a printable report
+    pocket_changes = {}
+    current_pockets = {}  # pocket_number -> insert_name
+    
+    for i, assignment in enumerate(machine_data['zips']):
+        zip_code = assignment['zip_code']
+        sequence = i + 1
+        current_inserts = set(current_pockets.values())
+        target_inserts = set(assignment['inserts'])
+        
+        pocket_changes[zip_code] = []
+        
+        # For the first ZIP code, simply add inserts to empty pockets
+        if i == 0:
+            for idx, insert in enumerate(target_inserts):
+                if idx < 16:  # Max 16 pockets
+                    pocket_num = idx + 1
+                    current_pockets[pocket_num] = insert
+                    pocket_changes[zip_code].append({
+                        'zip_code': zip_code,
+                        'sequence': sequence,
+                        'action': 'add',
+                        'pocket': pocket_num,
+                        'insert': insert
+                    })
+            continue
+        
+        # For subsequent ZIP codes:
+        # 1. First identify which inserts to keep (exact matches only)
+        inserts_to_keep = current_inserts.intersection(target_inserts)
+        pockets_to_keep = {}
+        
+        # Find one pocket for each insert we want to keep
+        for pocket_num, insert in current_pockets.items():
+            if insert in inserts_to_keep and insert not in pockets_to_keep:
+                pockets_to_keep[insert] = pocket_num
+        
+        # 2. Mark pockets for keeping
+        new_pocket_state = {}
+        for insert, pocket_num in pockets_to_keep.items():
+            pocket_changes[zip_code].append({
+                'zip_code': zip_code,
+                'sequence': sequence,
+                'action': 'keep',
+                'pocket': pocket_num,
+                'insert': insert
+            })
+            new_pocket_state[pocket_num] = insert
+        
+        # 3. Mark remaining current pockets for removal
+        for pocket_num, insert in current_pockets.items():
+            if pocket_num not in new_pocket_state:
+                pocket_changes[zip_code].append({
+                    'zip_code': zip_code,
+                    'sequence': sequence,
+                    'action': 'remove',
+                    'pocket': pocket_num,
+                    'insert': insert
+                })
+        
+        # 4. Add new inserts to available pockets
+        inserts_to_add = target_inserts - inserts_to_keep
+        available_pockets = [p for p in range(1, 17) if p not in new_pocket_state]
+        
+        for idx, insert in enumerate(inserts_to_add):
+            if idx < len(available_pockets):
+                pocket_num = available_pockets[idx]
+                pocket_changes[zip_code].append({
+                    'zip_code': zip_code,
+                    'sequence': sequence,
+                    'action': 'add',
+                    'pocket': pocket_num,
+                    'insert': insert
+                })
+                new_pocket_state[pocket_num] = insert
+        
+        # Update pocket state for next iteration
+        current_pockets = new_pocket_state.copy()
+    
+    return render_template(
+        'operator_report.html',
+        machine_id=machine_id,
+        machine_name=machine_data['name'],
+        assignments=machine_data['zips'],
+        total_inserts=total_machine_inserts,
+        pocket_changes=pocket_changes,
+        report_date=datetime.now().strftime("%Y-%m-%d %H:%M")
+    )
 
 if __name__ == '__main__':
     with app.app_context():

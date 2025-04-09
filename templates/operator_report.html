@@ -1,0 +1,460 @@
+{% extends 'base.html' %}
+
+{% block title %}Operator Report - {{ machine_name }}{% endblock %}
+
+{% block extra_css %}
+<style>
+    @media print {
+        body {
+            font-size: 12pt;
+        }
+        
+        .no-print {
+            display: none !important;
+        }
+        
+        .page-break {
+            page-break-after: always;
+        }
+        
+        .card {
+            border: 1px solid #000;
+            margin-bottom: 20px;
+        }
+        
+        .card-header {
+            background-color: #f8f9fa !important;
+            color: #000 !important;
+            border-bottom: 1px solid #000;
+        }
+        
+        .pocket-container {
+            page-break-inside: avoid;
+        }
+        
+        .zip-badge {
+            border: 1px solid #000;
+            color: #000 !important;
+            background-color: #f8f9fa !important;
+        }
+    }
+    
+    .pocket-container {
+        display: grid;
+        grid-template-columns: repeat(4, 1fr);
+        gap: 15px;
+        margin-bottom: 30px;
+    }
+    
+    .pocket {
+        border: 2px solid #ccc;
+        border-radius: 8px;
+        padding: 10px;
+        height: 120px;
+        position: relative;
+        transition: all 0.3s ease;
+    }
+    
+    .pocket-number {
+        position: absolute;
+        top: 5px;
+        left: 5px;
+        background-color: #6c757d;
+        color: white;
+        border-radius: 50%;
+        width: 24px;
+        height: 24px;
+        display: flex;
+        align-items: center;
+        justify-content: center;
+        font-size: 12px;
+        font-weight: bold;
+    }
+    
+    .pocket-content {
+        margin-top: 15px;
+        text-align: center;
+        font-size: 0.9rem;
+        word-break: break-word;
+    }
+    
+    .pocket.empty {
+        background-color: #f8f9fa;
+    }
+    
+    .pocket.add {
+        border-color: #28a745;
+        background-color: rgba(40, 167, 69, 0.1);
+    }
+    
+    .pocket.remove {
+        border-color: #dc3545;
+        background-color: rgba(220, 53, 69, 0.1);
+    }
+    
+    .pocket.keep {
+        border-color: #007bff;
+        background-color: rgba(0, 123, 255, 0.1);
+    }
+    
+    .change-indicator {
+        position: absolute;
+        top: 5px;
+        right: 5px;
+        width: 24px;
+        height: 24px;
+        border-radius: 50%;
+        display: flex;
+        align-items: center;
+        justify-content: center;
+        font-weight: bold;
+    }
+    
+    .change-indicator.add {
+        background-color: #28a745;
+        color: white;
+    }
+    
+    .change-indicator.remove {
+        background-color: #dc3545;
+        color: white;
+    }
+    
+    .legend-item {
+        display: flex;
+        align-items: center;
+        margin: 0 10px;
+    }
+    
+    .legend-color {
+        width: 20px;
+        height: 20px;
+        border-radius: 4px;
+        margin-right: 5px;
+    }
+    
+    .legend-color.add {
+        background-color: rgba(40, 167, 69, 0.1);
+        border: 2px solid #28a745;
+    }
+    
+    .legend-color.remove {
+        background-color: rgba(220, 53, 69, 0.1);
+        border: 2px solid #dc3545;
+    }
+    
+    .legend-color.keep {
+        background-color: rgba(0, 123, 255, 0.1);
+        border: 2px solid #007bff;
+    }
+    
+    .legend-color.empty {
+        background-color: #f8f9fa;
+        border: 2px solid #ccc;
+    }
+    
+    .day-mon {
+        background-color: #ffc107;
+        color: #000;
+        font-weight: bold;
+        padding: 2px 8px;
+        border-radius: 4px;
+        display: inline-block;
+    }
+    
+    .day-tue {
+        background-color: #17a2b8;
+        color: white;
+        font-weight: bold;
+        padding: 2px 8px;
+        border-radius: 4px;
+        display: inline-block;
+    }
+    
+    .segment-badge {
+        background-color: #17a2b8;
+        margin-right: 5px;
+        font-size: 0.85rem;
+    }
+    
+    .zip-sequence {
+        margin-bottom: 20px;
+    }
+    
+    .report-cover {
+        display: flex;
+        flex-direction: column;
+        align-items: center;
+        justify-content: center;
+        height: 80vh;
+    }
+    
+    .sequence-number {
+        font-size: 24px;
+        font-weight: bold;
+        width: 40px;
+        height: 40px;
+        border-radius: 50%;
+        background-color: #007bff;
+        color: white;
+        display: flex;
+        align-items: center;
+        justify-content: center;
+        margin-right: 10px;
+    }
+    
+    .print-header {
+        display: flex;
+        justify-content: space-between;
+        align-items: center;
+        margin-bottom: 20px;
+        padding-bottom: 10px;
+        border-bottom: 1px solid #ccc;
+    }
+</style>
+{% endblock %}
+
+{% block content %}
+<!-- Print Controls (only visible on screen) -->
+<div class="no-print mb-4">
+    <div class="d-flex justify-content-between align-items-center">
+        <h1>Operator Report - {{ machine_name }}</h1>
+        <div>
+            <a href="{{ url_for('view_schedule') }}" class="btn btn-secondary me-2">Back to Schedule</a>
+            <button onclick="window.print()" class="btn btn-primary">
+                <i class="fa fa-print"></i> Print Report
+            </button>
+        </div>
+    </div>
+    <div class="alert alert-info mt-3">
+        <p><strong>Printing Instructions:</strong></p>
+        <ul>
+            <li>Click the "Print Report" button above</li>
+            <li>In the print dialog, select "Save as PDF" if you want a digital copy</li>
+            <li>For best results, print in color</li>
+        </ul>
+    </div>
+</div>
+
+<!-- Cover Page -->
+<div class="report-cover page-break">
+    <div class="text-center">
+        <h1 class="display-4 mb-4">Machine Operator Report</h1>
+        <h2 class="mb-5">{{ machine_name }}</h2>
+        
+        <div class="card mb-4 w-75 mx-auto">
+            <div class="card-header bg-primary text-white">
+                <h3 class="mb-0">Production Schedule Summary</h3>
+            </div>
+            <div class="card-body">
+                <p><strong>ZIP Codes Assigned:</strong> {{ assignments|length }}</p>
+                <p><strong>Total Unique Inserts:</strong> {{ total_inserts }}</p>
+                <p><strong>Report Generated:</strong> {{ report_date }}</p>
+                
+                <hr class="my-4">
+                
+                <h5>ZIP Code Sequence:</h5>
+                <div class="zip-sequence">
+                    {% for zip in assignments %}
+                        <span class="badge bg-{% if zip.mailday == 'MON' %}warning{% elif zip.mailday == 'TUE' %}info{% else %}secondary{% endif %} zip-badge">
+                            {{ zip.zip_code }}
+                            {% if not loop.first %}
+                                <span class="badge bg-success">({{ zip.inserts_reused }} reused)</span>
+                            {% endif %}
+                        </span>
+                    {% endfor %}
+                </div>
+            </div>
+        </div>
+        
+        <div class="card w-75 mx-auto">
+            <div class="card-header bg-success text-white">
+                <h3 class="mb-0">Legend</h3>
+            </div>
+            <div class="card-body">
+                <div class="d-flex justify-content-center flex-wrap">
+                    <div class="legend-item">
+                        <div class="legend-color add"></div>
+                        <span>Add Insert</span>
+                    </div>
+                    <div class="legend-item">
+                        <div class="legend-color remove"></div>
+                        <span>Remove Insert</span>
+                    </div>
+                    <div class="legend-item">
+                        <div class="legend-color keep"></div>
+                        <span>Keep Insert</span>
+                    </div>
+                    <div class="legend-item">
+                        <div class="legend-color empty"></div>
+                        <span>Empty Pocket</span>
+                    </div>
+                </div>
+            </div>
+        </div>
+    </div>
+</div>
+
+<!-- Individual ZIP Code Pages -->
+{% for assignment in assignments %}
+<div class="page-break">
+    <div class="print-header">
+        <h2>{{ machine_name }} - ZIP {{ assignment.zip_code }}</h2>
+        <div>
+            <span class="badge bg-primary">Sequence {{ loop.index }}/{{ assignments|length }}</span>
+            {% if assignment.mailday == 'MON' %}
+                <span class="day-mon">Monday Delivery</span>
+            {% elif assignment.mailday == 'TUE' %}
+                <span class="day-tue">Tuesday Delivery</span>
+            {% endif %}
+        </div>
+    </div>
+    
+    <div class="row mb-4">
+        <div class="col-md-12">
+            <div class="card">
+                <div class="card-header bg-primary text-white">
+                    <h5 class="mb-0">Pocket Configuration for ZIP {{ assignment.zip_code }}</h5>
+                </div>
+                <div class="card-body">
+                    <!-- Display segments if available -->
+                    {% if assignment.segments and assignment.segments|length > 0 %}
+                    <div class="mb-3">
+                        <h6>Segments:</h6>
+                        <div class="mb-3">
+                            {% for segment in assignment.segments %}
+                                <span class="badge bg-info segment-badge">{{ segment }}</span>
+                            {% endfor %}
+                        </div>
+                    </div>
+                    {% endif %}
+                    
+                    <!-- Display inserts reused count for non-first ZIP -->
+                    {% if not loop.first %}
+                    <div class="mb-3">
+                        <h6>Inserts Reused: <span class="badge bg-success">{{ assignment.inserts_reused }}</span></h6>
+                    </div>
+                    {% endif %}
+                    
+                    <!-- Pocket Visualization -->
+                    <div class="pocket-container">
+                        {% for i in range(1, 17) %}
+                            <div class="pocket empty" id="pocket-{{ assignment.zip_code }}-{{ i }}">
+                                <div class="pocket-number">{{ i }}</div>
+                                <div class="pocket-content">Empty</div>
+                            </div>
+                        {% endfor %}
+                    </div>
+                    
+                    <!-- Change Instructions -->
+                    <div class="change-instructions mt-4">
+                        <h5>Pocket Change Instructions:</h5>
+                        <div id="changeInstructions-{{ assignment.zip_code }}">
+                            {% set changes = pocket_changes[assignment.zip_code] %}
+                            {% set add_changes = changes|selectattr('action', 'equalto', 'add')|list %}
+                            {% set remove_changes = changes|selectattr('action', 'equalto', 'remove')|list %}
+                            {% set keep_changes = changes|selectattr('action', 'equalto', 'keep')|list %}
+                            
+                            {% if loop.first %}
+                                <div class="alert alert-success">
+                                    <strong>Initial Setup:</strong> Fill empty machine with the inserts shown above.
+                                </div>
+                            {% else %}
+                                <div class="card mb-3">
+                                    <div class="card-body">
+                                        <div class="row">
+                                            {% if remove_changes %}
+                                            <div class="col-md-6">
+                                                <h6 class="text-danger">Step 1: REMOVE these inserts</h6>
+                                                <ul class="list-group">
+                                                    {% for change in remove_changes %}
+                                                    <li class="list-group-item list-group-item-danger">
+                                                        <strong>Pocket {{ change.pocket }}:</strong> {{ change.insert }}
+                                                    </li>
+                                                    {% endfor %}
+                                                </ul>
+                                            </div>
+                                            {% endif %}
+                                            
+                                            {% if add_changes %}
+                                            <div class="col-md-6">
+                                                <h6 class="text-success">Step 2: ADD these inserts</h6>
+                                                <ul class="list-group">
+                                                    {% for change in add_changes %}
+                                                    <li class="list-group-item list-group-item-success">
+                                                        <strong>Pocket {{ change.pocket }}:</strong> {{ change.insert }}
+                                                    </li>
+                                                    {% endfor %}
+                                                </ul>
+                                            </div>
+                                            {% endif %}
+                                        </div>
+                                        
+                                        {% if keep_changes %}
+                                        <div class="mt-3">
+                                            <h6 class="text-primary">Inserts to KEEP in place</h6>
+                                            <ul class="list-group">
+                                                {% for change in keep_changes %}
+                                                <li class="list-group-item list-group-item-primary">
+                                                    <strong>Pocket {{ change.pocket }}:</strong> {{ change.insert }}
+                                                </li>
+                                                {% endfor %}
+                                            </ul>
+                                        </div>
+                                        {% endif %}
+                                    </div>
+                                </div>
+                            {% endif %}
+                        </div>
+                    </div>
+                </div>
+            </div>
+        </div>
+    </div>
+</div>
+{% endfor %}
+
+{% endblock %}
+
+{% block extra_js %}
+<script>
+    document.addEventListener('DOMContentLoaded', function() {
+        // Process pocket changes for each ZIP code
+        {% for assignment in assignments %}
+            var zipCode = "{{ assignment.zip_code }}";
+            var changes = {{ pocket_changes[assignment.zip_code]|tojson }};
+            
+            // Process changes for this zip code
+            changes.forEach(change => {
+                const pocketElement = document.getElementById(`pocket-${zipCode}-${change.pocket}`);
+                if (!pocketElement) return;
+                
+                if (change.action === 'add') {
+                    pocketElement.className = 'pocket add';
+                    pocketElement.querySelector('.pocket-content').textContent = change.insert;
+                    
+                    // Add change indicator
+                    const indicator = document.createElement('div');
+                    indicator.className = 'change-indicator add';
+                    indicator.textContent = '+';
+                    pocketElement.appendChild(indicator);
+                } 
+                else if (change.action === 'remove') {
+                    pocketElement.className = 'pocket remove';
+                    pocketElement.querySelector('.pocket-content').textContent = change.insert;
+                    
+                    // Add change indicator
+                    const indicator = document.createElement('div');
+                    indicator.className = 'change-indicator remove';
+                    indicator.textContent = '-';
+                    pocketElement.appendChild(indicator);
+                }
+                else if (change.action === 'keep') {
+                    pocketElement.className = 'pocket keep';
+                    pocketElement.querySelector('.pocket-content').textContent = change.insert;
+                }
+            });
+        {% endfor %}
+    });
+</script>
+{% endblock %} 
