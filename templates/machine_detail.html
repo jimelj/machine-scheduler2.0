@@ -1,0 +1,758 @@
+{% extends 'base.html' %}
+
+{% block title %}{{ machine_name }} Details{% endblock %}
+
+{% block extra_css %}
+<style>
+    .pocket-container {
+        display: grid;
+        grid-template-columns: repeat(4, 1fr);
+        gap: 15px;
+        margin-bottom: 30px;
+    }
+    
+    .pocket {
+        border: 2px solid #ccc;
+        border-radius: 8px;
+        padding: 10px;
+        height: 120px;
+        position: relative;
+        transition: all 0.3s ease;
+    }
+    
+    .pocket-number {
+        position: absolute;
+        top: 5px;
+        left: 5px;
+        background-color: #6c757d;
+        color: white;
+        border-radius: 50%;
+        width: 24px;
+        height: 24px;
+        display: flex;
+        align-items: center;
+        justify-content: center;
+        font-size: 12px;
+        font-weight: bold;
+    }
+    
+    .pocket-content {
+        margin-top: 15px;
+        text-align: center;
+        font-size: 0.9rem;
+        word-break: break-word;
+    }
+    
+    .pocket.empty {
+        background-color: #f8f9fa;
+    }
+    
+    .pocket.add {
+        border-color: #28a745;
+        background-color: rgba(40, 167, 69, 0.1);
+    }
+    
+    .pocket.remove {
+        border-color: #dc3545;
+        background-color: rgba(220, 53, 69, 0.1);
+    }
+    
+    .pocket.keep {
+        border-color: #007bff;
+        background-color: rgba(0, 123, 255, 0.1);
+    }
+    
+    .change-indicator {
+        position: absolute;
+        top: 5px;
+        right: 5px;
+        width: 24px;
+        height: 24px;
+        border-radius: 50%;
+        display: flex;
+        align-items: center;
+        justify-content: center;
+        font-weight: bold;
+    }
+    
+    .change-indicator.add {
+        background-color: #28a745;
+        color: white;
+    }
+    
+    .change-indicator.remove {
+        background-color: #dc3545;
+        color: white;
+    }
+    
+    .zip-sequence {
+        margin-bottom: 20px;
+    }
+    
+    .zip-badge {
+        font-size: 1rem;
+        margin-right: 8px;
+        padding: 5px 10px;
+        margin-bottom: 5px;
+    }
+    
+    .zip-badge.active {
+        background-color: #28a745;
+    }
+    
+    .change-legend {
+        display: flex;
+        justify-content: center;
+        margin-bottom: 20px;
+    }
+    
+    .legend-item {
+        display: flex;
+        align-items: center;
+        margin: 0 10px;
+    }
+    
+    .legend-color {
+        width: 20px;
+        height: 20px;
+        border-radius: 4px;
+        margin-right: 5px;
+    }
+    
+    .legend-color.add {
+        background-color: rgba(40, 167, 69, 0.1);
+        border: 2px solid #28a745;
+    }
+    
+    .legend-color.remove {
+        background-color: rgba(220, 53, 69, 0.1);
+        border: 2px solid #dc3545;
+    }
+    
+    .legend-color.keep {
+        background-color: rgba(0, 123, 255, 0.1);
+        border: 2px solid #007bff;
+    }
+    
+    .legend-color.empty {
+        background-color: #f8f9fa;
+        border: 2px solid #ccc;
+    }
+    
+    .sequence-controls {
+        display: flex;
+        justify-content: center;
+        margin-bottom: 20px;
+    }
+    
+    .sequence-controls button {
+        margin: 0 5px;
+    }
+    
+    .reused-count {
+        font-weight: bold;
+        color: #28a745;
+    }
+    
+    .segments-list {
+        margin-top: 10px;
+        display: flex;
+        flex-wrap: wrap;
+        gap: 5px;
+        justify-content: center;
+    }
+    
+    .segment-badge {
+        background-color: #17a2b8;
+        margin-right: 5px;
+        font-size: 0.85rem;
+    }
+    
+    .day-indicator {
+        position: absolute;
+        top: 10px;
+        right: 10px;
+        padding: 5px 10px;
+        border-radius: 4px;
+        font-size: 0.8rem;
+        font-weight: bold;
+    }
+    
+    .day-mon {
+        background-color: #ffc107;
+        color: #333;
+        font-weight: bold;
+        padding: 2px 8px;
+        border-radius: 4px;
+        display: inline-block;
+    }
+    
+    .day-tue {
+        background-color: #17a2b8;
+        color: white;
+        font-weight: bold;
+        padding: 2px 8px;
+        border-radius: 4px;
+        display: inline-block;
+    }
+    
+    .current-zip-info {
+        margin-top: 20px;
+        padding: 15px;
+        background-color: #f8f9fa;
+        border-radius: 8px;
+        box-shadow: 0 2px 4px rgba(0,0,0,0.05);
+    }
+    
+    .delivery-day-label {
+        font-size: 1.1rem;
+        margin-top: 10px;
+        padding: 5px 15px;
+        display: inline-block;
+        border-radius: 4px;
+    }
+</style>
+{% endblock %}
+
+{% block content %}
+<div class="row">
+    <div class="col-md-12">
+        <h2>{{ machine_name }}</h2>
+        <p class="lead">View pocket assignments and changes for {{ machine_name }}.</p>
+        <a href="{{ url_for('view_schedule') }}" class="btn btn-secondary mb-3">Back to Schedule</a>
+        <hr>
+    </div>
+</div>
+
+<div class="row mb-3">
+    <div class="col-md-6">
+        <div class="card">
+            <div class="card-header bg-info text-white">
+                <h5 class="mb-0">Machine Summary</h5>
+            </div>
+            <div class="card-body">
+                <p><strong>ZIP Codes Assigned:</strong> {{ assignments|length }}</p>
+                <p><strong>Total Inserts:</strong> <span class="reused-count">{{ total_inserts }}</span></p>
+                <!-- Debug output -->
+                <p class="text-muted small">Debug: total_inserts={{ total_inserts|default('no value') }}</p>
+            </div>
+        </div>
+    </div>
+</div>
+
+<div class="row">
+    <div class="col-md-12">
+        <div class="card mb-4">
+            <div class="card-header bg-primary text-white">
+                <h5 class="mb-0">ZIP Code Sequence</h5>
+            </div>
+            <div class="card-body">
+                <div class="sequence-controls">
+                    <button id="prevZip" class="btn btn-outline-primary">Previous ZIP</button>
+                    <button id="nextZip" class="btn btn-outline-primary">Next ZIP</button>
+                </div>
+                
+                <div class="zip-sequence text-center">
+                    {% for zip in assignments %}
+                        <span class="badge {% if zip.mailday == 'MON' %}bg-warning text-dark{% elif zip.mailday == 'TUE' %}bg-info text-white{% else %}bg-secondary{% endif %} zip-badge" 
+                              data-zip="{{ zip.zip_code }}" 
+                              data-sequence="{{ loop.index }}">
+                            {{ zip.zip_code }}
+                            <span class="reused-badge">({{ zip.inserts_reused }} reused)</span>
+                        </span>
+                    {% endfor %}
+                </div>
+            </div>
+        </div>
+    </div>
+</div>
+
+<div class="row">
+    <div class="col-md-12">
+        <div class="card">
+            <div class="card-header bg-success text-white">
+                <h5 class="mb-0">Machine Pockets Visualization</h5>
+            </div>
+            <div class="card-body">
+                <div class="change-legend">
+                    <div class="legend-item">
+                        <div class="legend-color add"></div>
+                        <span>Add Insert</span>
+                    </div>
+                    <div class="legend-item">
+                        <div class="legend-color remove"></div>
+                        <span>Remove Insert</span>
+                    </div>
+                    <div class="legend-item">
+                        <div class="legend-color keep"></div>
+                        <span>Keep Insert</span>
+                    </div>
+                    <div class="legend-item">
+                        <div class="legend-color empty"></div>
+                        <span>Empty Pocket</span>
+                    </div>
+                </div>
+                
+                <div class="pocket-container">
+                    {% for i in range(1, 17) %}
+                        <div class="pocket empty" id="pocket-{{ i }}">
+                            <div class="pocket-number">{{ i }}</div>
+                            <div class="pocket-content">Empty</div>
+                        </div>
+                    {% endfor %}
+                </div>
+                
+                <div class="current-zip-info text-center mb-4">
+                    <h4>Current ZIP: <span id="currentZip">Select a ZIP code</span></h4>
+                    <p>Inserts Reused: <span id="insertsReused" class="reused-count">0</span></p>
+                    <div>
+                        <strong>Segments:</strong>
+                        <div class="segments-list" id="segmentsList"></div>
+                    </div>
+                    <div>
+                        <strong>Delivery Day:</strong> <span id="deliveryDay" class="delivery-day-label">-</span>
+                    </div>
+                </div>
+                
+                <div class="change-instructions">
+                    <h5>Pocket Change Instructions:</h5>
+                    <ul id="changeInstructions" class="list-group">
+                        <li class="list-group-item text-center">Select a ZIP code to view change instructions</li>
+                    </ul>
+                </div>
+            </div>
+        </div>
+    </div>
+</div>
+{% endblock %}
+
+{% block extra_js %}
+<script>
+    document.addEventListener('DOMContentLoaded', function() {
+        // Load the assignments data
+        const assignmentsData = JSON.parse('{{ assignments|tojson }}');
+        
+        console.log('Assignments data:', assignmentsData);
+        
+        // Debug segments info
+        assignmentsData.forEach(assignment => {
+            console.log(`ZIP ${assignment.zip_code} segments:`, assignment.segments ? assignment.segments : "No segments");
+            console.log(`ZIP ${assignment.zip_code} inserts_reused:`, assignment.inserts_reused);
+            console.log(`ZIP ${assignment.zip_code} mailday:`, assignment.mailday || "No mailday");
+        });
+        
+        // Sort assignments by sequence
+        assignmentsData.sort((a, b) => (a.sequence || 0) - (b.sequence || 0));
+        
+        // Initialize variables
+        let currentZipIndex = 0;
+        
+        // Function to generate pocket changes based on assignments
+        function generatePocketChanges() {
+            // Result array
+            const changes = [];
+            
+            // Track the current contents of each pocket (pocket number → insert)
+            const machineState = {};
+            
+            // Process each ZIP code assignment in sequence
+            assignmentsData.forEach((assignment, index) => {
+                const zipCode = assignment.zip_code;
+                const sequence = index + 1;
+                
+                // Get unique list of inserts needed for this ZIP code
+                const targetInsertSet = new Set(assignment.inserts);
+                const targetInserts = Array.from(targetInsertSet);
+                
+                // If this is the first ZIP code, simply fill pockets with initial inserts
+                if (index === 0) {
+                    targetInserts.forEach((insert, i) => {
+                        if (i < 16) { // Max 16 pockets
+                            const pocket = i + 1;
+                            changes.push({
+                                zip_code: zipCode,
+                                sequence: sequence,
+                                action: 'add',
+                                pocket: pocket,
+                                insert: insert
+                            });
+                            machineState[pocket] = insert;
+                        }
+                    });
+                    return; // Skip to next ZIP code
+                }
+                
+                // For subsequent ZIP codes, handle transitions intelligently
+                
+                // STEP 1: Create map of inserts to their current pocket locations
+                const currentInsertLocations = {};
+                Object.entries(machineState).forEach(([pocket, insert]) => {
+                    if (!currentInsertLocations[insert]) {
+                        currentInsertLocations[insert] = [];
+                    }
+                    currentInsertLocations[insert].push(parseInt(pocket));
+                });
+                
+                // STEP 2: Make explicit decisions for each pocket
+                const pocketDecisions = {}; // Will track what to do with each pocket
+                
+                // STEP 2A: For each needed insert, decide which pocket(s) to keep
+                const keptInserts = new Set(); // Track which inserts we've decided to keep
+                
+                targetInserts.forEach(insert => {
+                    // If this insert is already in any pocket
+                    if (currentInsertLocations[insert] && currentInsertLocations[insert].length > 0) {
+                        // Keep only the first pocket that has this insert
+                        const pocketToKeep = currentInsertLocations[insert][0];
+                        pocketDecisions[pocketToKeep] = { action: 'keep', insert: insert };
+                        keptInserts.add(insert);
+                        
+                        // Mark any additional pockets with the same insert for removal
+                        currentInsertLocations[insert].slice(1).forEach(pocket => {
+                            pocketDecisions[pocket] = { action: 'remove', insert: insert };
+                        });
+                    }
+                });
+                
+                // STEP 2B: Decide what to do with pockets that have inserts we don't need
+                Object.entries(machineState).forEach(([pocket, insert]) => {
+                    const pocketNum = parseInt(pocket);
+                    
+                    // Skip pockets we've already made decisions for
+                    if (pocketDecisions[pocketNum]) return;
+                    
+                    // If pocket has an insert not needed for this ZIP, mark it for removal
+                    if (!targetInsertSet.has(insert)) {
+                        pocketDecisions[pocketNum] = { action: 'remove', insert: insert };
+                    }
+                });
+                
+                // STEP 3: Find inserts that we still need to add
+                const insertsNeeded = targetInserts.filter(insert => !keptInserts.has(insert));
+                
+                // STEP 4: Find available pockets (those we're emptying or that are already empty)
+                const availablePockets = [];
+                
+                // First add pockets we're emptying
+                Object.entries(pocketDecisions).forEach(([pocket, decision]) => {
+                    if (decision.action === 'remove') {
+                        availablePockets.push(parseInt(pocket));
+                    }
+                });
+                
+                // Then add any pockets that are already empty
+                for (let p = 1; p <= 16; p++) {
+                    if (!machineState[p] && !availablePockets.includes(p)) {
+                        availablePockets.push(p);
+                    }
+                }
+                
+                // STEP 5: Create planned 'add' actions for needed inserts
+                insertsNeeded.forEach((insert, idx) => {
+                    if (idx < availablePockets.length) {
+                        const pocket = availablePockets[idx];
+                        pocketDecisions[pocket] = { action: 'add', insert: insert };
+                    }
+                });
+                
+                // STEP 6: Now generate all changes and update machine state
+                
+                // Process keeps first (no change to machine state)
+                Object.entries(pocketDecisions).forEach(([pocket, decision]) => {
+                    if (decision.action === 'keep') {
+                        changes.push({
+                            zip_code: zipCode,
+                            sequence: sequence,
+                            action: 'keep',
+                            pocket: parseInt(pocket),
+                            insert: decision.insert
+                        });
+                    }
+                });
+                
+                // Then process removals (update machine state)
+                Object.entries(pocketDecisions).forEach(([pocket, decision]) => {
+                    if (decision.action === 'remove') {
+                        changes.push({
+                            zip_code: zipCode,
+                            sequence: sequence,
+                            action: 'remove',
+                            pocket: parseInt(pocket),
+                            insert: decision.insert
+                        });
+                        delete machineState[pocket]; // Remove insert from tracking
+                    }
+                });
+                
+                // Finally process additions (update machine state)
+                Object.entries(pocketDecisions).forEach(([pocket, decision]) => {
+                    if (decision.action === 'add') {
+                        changes.push({
+                            zip_code: zipCode,
+                            sequence: sequence,
+                            action: 'add',
+                            pocket: parseInt(pocket),
+                            insert: decision.insert
+                        });
+                        machineState[pocket] = decision.insert; // Add insert to tracking
+                    }
+                });
+            });
+            
+            return changes;
+        }
+        
+        // Generate pocket changes
+        const allPocketChanges = generatePocketChanges();
+        console.log('Generated pocket changes:', allPocketChanges);
+        
+        // Initialize pocket state
+        let currentPocketState = {};
+        
+        // Function to update the pocket visualization
+        function updatePocketVisualization(zipCode, sequence) {
+            console.log(`Updating visualization for ZIP ${zipCode}, sequence ${sequence}`);
+            
+            // Reset all pockets to empty state
+            for (let i = 1; i <= 16; i++) {
+                const pocketElement = document.getElementById(`pocket-${i}`);
+                pocketElement.className = 'pocket empty';
+                pocketElement.querySelector('.pocket-content').textContent = 'Empty';
+                
+                // Remove any change indicators
+                const existingIndicator = pocketElement.querySelector('.change-indicator');
+                if (existingIndicator) {
+                    existingIndicator.remove();
+                }
+            }
+            
+            // Get changes for this zip code and sequence
+            const changes = allPocketChanges.filter(change => 
+                change.zip_code === zipCode && change.sequence === sequence
+            );
+            
+            console.log(`Found ${changes.length} changes for ZIP ${zipCode}:`, changes);
+            
+            // Apply the changes to the visualization
+            changes.forEach(change => {
+                const pocketElement = document.getElementById(`pocket-${change.pocket}`);
+                
+                if (change.action === 'add') {
+                    pocketElement.className = 'pocket add';
+                    pocketElement.querySelector('.pocket-content').textContent = change.insert;
+                    
+                    // Add change indicator
+                    const indicator = document.createElement('div');
+                    indicator.className = 'change-indicator add';
+                    indicator.textContent = '+';
+                    pocketElement.appendChild(indicator);
+                    
+                    // Update pocket state
+                    currentPocketState[change.pocket] = change.insert;
+                } 
+                else if (change.action === 'remove') {
+                    pocketElement.className = 'pocket remove';
+                    pocketElement.querySelector('.pocket-content').textContent = change.insert;
+                    
+                    // Add change indicator
+                    const indicator = document.createElement('div');
+                    indicator.className = 'change-indicator remove';
+                    indicator.textContent = '-';
+                    pocketElement.appendChild(indicator);
+                    
+                    // Update pocket state
+                    delete currentPocketState[change.pocket];
+                }
+                else if (change.action === 'keep') {
+                    pocketElement.className = 'pocket keep';
+                    pocketElement.querySelector('.pocket-content').textContent = change.insert;
+                    
+                    // Update pocket state (no change to state)
+                    currentPocketState[change.pocket] = change.insert;
+                }
+            });
+            
+            // Show any remaining inserts (this is for the first ZIP code)
+            if (sequence === 1) {
+                for (const [pocket, insert] of Object.entries(currentPocketState)) {
+                    const pocketNum = parseInt(pocket);
+                    const pocketElement = document.getElementById(`pocket-${pocketNum}`);
+                    if (pocketElement.className === 'pocket empty') {
+                        pocketElement.className = 'pocket add';
+                        pocketElement.querySelector('.pocket-content').textContent = insert;
+                        
+                        // Add change indicator
+                        const indicator = document.createElement('div');
+                        indicator.className = 'change-indicator add';
+                        indicator.textContent = '+';
+                        pocketElement.appendChild(indicator);
+                    }
+                }
+            }
+            
+            // Update current ZIP display
+            document.getElementById('currentZip').textContent = zipCode;
+            
+            // Find the current assignment
+            const assignment = assignmentsData.find(a => a.zip_code === zipCode);
+            console.log('Current assignment for visualization:', assignment);
+            
+            // Calculate the actual inserts reused count based on the 'keep' pockets
+            // This is more accurate than the value in the data
+            const keepPockets = document.querySelectorAll('.pocket.keep');
+            const insertsReused = keepPockets.length;
+            document.getElementById('insertsReused').textContent = insertsReused || assignment.inserts_reused || 0;
+            
+            // Update segments list
+            const segmentsList = document.getElementById('segmentsList');
+            segmentsList.innerHTML = '';
+            
+            if (assignment && assignment.segments && Array.isArray(assignment.segments) && assignment.segments.length > 0) {
+                console.log(`Displaying ${assignment.segments.length} segments for ZIP ${zipCode}:`, assignment.segments);
+                assignment.segments.forEach(segment => {
+                    if (segment) {
+                        const badge = document.createElement('span');
+                        badge.className = 'badge segment-badge';
+                        badge.textContent = segment;
+                        segmentsList.appendChild(badge);
+                    }
+                });
+            } else {
+                console.log(`No segments found for ZIP ${zipCode}`);
+                // Add a placeholder if no segments
+                const badge = document.createElement('span');
+                badge.className = 'badge bg-secondary';
+                badge.textContent = 'No segments';
+                segmentsList.appendChild(badge);
+            }
+            
+            // Update delivery day
+            const deliveryDay = document.getElementById('deliveryDay');
+            if (assignment && assignment.mailday) {
+                const mailday = assignment.mailday.toUpperCase().trim();
+                if (mailday === 'MON' || mailday === 'MONDAY' || mailday === 'M') {
+                    deliveryDay.textContent = 'Monday';
+                    deliveryDay.className = 'delivery-day-label day-mon';
+                } else if (mailday === 'TUE' || mailday === 'TUESDAY' || mailday === 'T') {
+                    deliveryDay.textContent = 'Tuesday';
+                    deliveryDay.className = 'delivery-day-label day-tue';
+                } else if (mailday) {
+                    deliveryDay.textContent = mailday;
+                    deliveryDay.className = 'delivery-day-label';
+                } else {
+                    deliveryDay.textContent = '-';
+                    deliveryDay.className = 'delivery-day-label';
+                }
+            } else {
+                deliveryDay.textContent = '-';
+                deliveryDay.className = 'delivery-day-label';
+            }
+            
+            // Update change instructions
+            updateChangeInstructions(changes);
+            
+            // Update ZIP badges
+            document.querySelectorAll('.zip-badge').forEach(badge => {
+                if (badge.dataset.zip === zipCode) {
+                    badge.classList.add('active');
+                    badge.classList.remove('bg-secondary');
+                    badge.classList.add('bg-success');
+                    
+                    // Update the inserts reused count in the badge to match the actual calculation
+                    const reusedBadge = badge.querySelector('.reused-badge');
+                    if (reusedBadge) {
+                        reusedBadge.textContent = `(${insertsReused} reused)`;
+                    }
+                } else {
+                    badge.classList.remove('active');
+                    badge.classList.remove('bg-success');
+                    badge.classList.add('bg-secondary');
+                }
+            });
+        }
+        
+        // Function to update change instructions
+        function updateChangeInstructions(changes) {
+            const instructionsElement = document.getElementById('changeInstructions');
+            instructionsElement.innerHTML = '';
+            
+            if (changes.length === 0) {
+                const li = document.createElement('li');
+                li.className = 'list-group-item text-center';
+                li.textContent = 'No changes needed for this ZIP code';
+                instructionsElement.appendChild(li);
+                return;
+            }
+            
+            // Group changes by action
+            const addChanges = changes.filter(change => change.action === 'add');
+            const removeChanges = changes.filter(change => change.action === 'remove');
+            
+            // Add remove instructions first
+            if (removeChanges.length > 0) {
+                const li = document.createElement('li');
+                li.className = 'list-group-item list-group-item-danger';
+                li.innerHTML = '<strong>REMOVE these inserts:</strong>';
+                
+                const ul = document.createElement('ul');
+                removeChanges.forEach(change => {
+                    const innerLi = document.createElement('li');
+                    innerLi.textContent = `Pocket ${change.pocket}: ${change.insert}`;
+                    ul.appendChild(innerLi);
+                });
+                
+                li.appendChild(ul);
+                instructionsElement.appendChild(li);
+            }
+            
+            // Then add insert instructions
+            if (addChanges.length > 0) {
+                const li = document.createElement('li');
+                li.className = 'list-group-item list-group-item-success';
+                li.innerHTML = '<strong>ADD these inserts:</strong>';
+                
+                const ul = document.createElement('ul');
+                addChanges.forEach(change => {
+                    const innerLi = document.createElement('li');
+                    innerLi.textContent = `Pocket ${change.pocket}: ${change.insert}`;
+                    ul.appendChild(innerLi);
+                });
+                
+                li.appendChild(ul);
+                instructionsElement.appendChild(li);
+            }
+        }
+        
+        // Function to select a ZIP code
+        function selectZip(index) {
+            if (index < 0) index = 0;
+            if (index >= assignmentsData.length) index = assignmentsData.length - 1;
+            
+            currentZipIndex = index;
+            const assignment = assignmentsData[index];
+            updatePocketVisualization(assignment.zip_code, index + 1);
+        }
+        
+        // Add event listeners to ZIP badges
+        document.querySelectorAll('.zip-badge').forEach((badge, index) => {
+            badge.addEventListener('click', () => {
+                selectZip(index);
+            });
+        });
+        
+        // Add event listeners to navigation buttons
+        document.getElementById('prevZip').addEventListener('click', () => {
+            selectZip(currentZipIndex - 1);
+        });
+        
+        document.getElementById('nextZip').addEventListener('click', () => {
+            selectZip(currentZipIndex + 1);
+        });
+        
+        // Select the first ZIP code by default if available
+        if (assignmentsData.length > 0) {
+            selectZip(0);
+        }
+    });
+</script>
+{% endblock %}

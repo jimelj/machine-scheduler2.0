@@ -1,0 +1,81 @@
+{% extends 'base.html' %}
+
+{% block title %}Production Scheduler - Home{% endblock %}
+
+{% block content %}
+<div class="row">
+    <div class="col-md-12">
+        <div class="jumbotron bg-light p-5 rounded">
+            <h1 class="display-4">Production Scheduler</h1>
+            <p class="lead">Schedule production across 3 machines with 16 pockets each, maximizing insert continuity between consecutive zip codes.</p>
+            <hr class="my-4">
+            <p>This application helps optimize your production workflow by scheduling zip codes to machines in a way that minimizes the need to change inserts between jobs.</p>
+            {% if current_data %}
+            <div class="alert alert-info mb-4 data-status-alert" role="alert">
+                <i class="fas fa-info-circle"></i> Currently loaded data: <strong>{{ current_data }}</strong>
+            </div>
+            {% endif %}
+            <div class="d-grid gap-2 d-md-flex justify-content-md-start">
+                <a href="{{ url_for('upload_files') }}" class="btn btn-primary btn-lg me-md-2">{% if current_data %}Update{% else %}Upload{% endif %} Insert Orders</a>
+                <a href="{{ url_for('schedule') }}" class="btn btn-success btn-lg">Generate Schedule</a>
+            </div>
+        </div>
+    </div>
+</div>
+
+<div class="row mt-5">
+    <div class="col-md-4">
+        <div class="card">
+            <div class="card-body">
+                <h5 class="card-title">{% if current_data %}Update{% else %}Upload{% endif %} Files</h5>
+                <p class="card-text">
+                    {% if current_data %}
+                    Currently using: <strong>{{ current_data }}</strong><br>
+                    Upload a new Insert Orders file to update the schedule.
+                    {% else %}
+                    Upload your weekly Insert Orders file to begin the scheduling process.
+                    {% endif %}
+                </p>
+                <a href="{{ url_for('upload_files') }}" class="btn btn-primary">{% if current_data %}Update{% else %}Upload{% endif %} Files</a>
+            </div>
+        </div>
+    </div>
+    <div class="col-md-4">
+        <div class="card">
+            <div class="card-body">
+                <h5 class="card-title">Generate Schedule</h5>
+                <p class="card-text">Create an optimized production schedule for your machines.</p>
+                <a href="{{ url_for('schedule') }}" class="btn btn-primary">Generate Schedule</a>
+            </div>
+        </div>
+    </div>
+    <div class="col-md-4">
+        <div class="card">
+            <div class="card-body">
+                <h5 class="card-title">View Schedule</h5>
+                <p class="card-text">View the generated schedule and machine pocket assignments.</p>
+                <a href="{{ url_for('view_schedule') }}" class="btn btn-primary">View Schedule</a>
+            </div>
+        </div>
+    </div>
+</div>
+
+<div class="row mt-5">
+    <div class="col-md-12">
+        <div class="card">
+            <div class="card-header">
+                <h5>How It Works</h5>
+            </div>
+            <div class="card-body">
+                <ol>
+                    <li>Upload your weekly Insert Orders file</li>
+                    <li>The system filters for CBA LONG ISLAND entries</li>
+                    <li>The system matches ZIP codes with the Zips by Address File Group to determine MON/TUE scheduling</li>
+                    <li>The scheduling algorithm assigns zip codes to machines to maximize insert continuity</li>
+                    <li>View the schedule and pocket assignments for each machine</li>
+                </ol>
+            </div>
+        </div>
+    </div>
+</div>
+{% endblock %}

@@ -1,0 +1,63 @@
+{% extends 'base.html' %}
+
+{% block title %}Production Scheduler - Upload Files{% endblock %}
+
+{% block content %}
+<div class="row">
+    <div class="col-md-12">
+        <h2>Upload Insert Orders File</h2>
+        <p class="lead">Upload your weekly Insert Orders file to begin the scheduling process.</p>
+        <hr>
+    </div>
+</div>
+
+<div class="row">
+    <div class="col-md-8">
+        <div class="card">
+            <div class="card-header">
+                <h5>Upload Form</h5>
+            </div>
+            <div class="card-body">
+                <form method="POST" enctype="multipart/form-data">
+                    <div class="mb-3">
+                        <label for="insert_orders" class="form-label">Insert Orders File (CSV)</label>
+                        <input type="file" class="form-control" id="insert_orders" name="insert_orders" accept=".csv" required>
+                        <div class="form-text">Upload the weekly Insert Orders file in CSV format.</div>
+                    </div>
+                    <button type="submit" class="btn btn-primary">Upload</button>
+                </form>
+            </div>
+        </div>
+    </div>
+    <div class="col-md-4">
+        <div class="card">
+            <div class="card-header">
+                <h5>File Requirements</h5>
+            </div>
+            <div class="card-body">
+                <p>The Insert Orders file should contain the following columns:</p>
+                <ul>
+                    <li>ZipRoute</li>
+                    <li>DistributorName</li>
+                    <li>AdvertiserAccount</li>
+                    <li>StoreName</li>
+                    <li>ZipRouteVersion</li>
+                    <li>Pieces</li>
+                    <li>OrderStatusDesc</li>
+                    <li>InHomeEndDate</li>
+                </ul>
+                <p>The system will automatically filter for "CBA LONG ISLAND" entries.</p>
+            </div>
+        </div>
+    </div>
+</div>
+
+<div class="row mt-4">
+    <div class="col-md-12">
+        <div class="alert alert-info">
+            <h5>Note:</h5>
+            <p>The Zips by Address File Group is already loaded in the system. The system will use this file to determine if a ZIP is scheduled for Monday or Tuesday.</p>
+        </div>
+    </div>
+</div>
+{% endblock %}

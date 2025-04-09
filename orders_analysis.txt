@@ -1,0 +1,22 @@
+CSV file shape: (10581, 49)
+CSV file columns: ['ZipRoute', 'DistributorName', 'SubDistributor', 'ProgramName', 'StoreName', 'StoreNumber', 'Pieces', 'DistributorProgramGroupName', 'ZipRouteNote', 'ZipRouteVersion', 'AdvertiserAccount', 'BillingAccount', 'MasterAccount', 'AffiliateAccount', 'AllianceAccount', 'OrderId', 'OrderDate', 'InHomeStartDate', 'InHomeEndDate', 'OrderStatusDesc', 'OrderDeliveryDesc', 'PromotionDescription', 'ZipRouteStatus', 'ZipRouteCity', 'ZipRouteState', 'SalesRep', 'CustServRep', 'BillingRep', 'OrderSalesRep', 'OrderCustSrvRep', 'OrderBillingRep', 'OrderNotes', 'OrderSubDistNotes', 'AdVersionName', 'EstimatedWeightOunces', 'TabPageEquivalent', 'PageSize', 'Thickness', 'PaperStock', 'Length', 'Width', 'CopyDestination', 'CopyDate', 'CopyDisposition', 'ExternalOrderId', 'DistributorContact', 'DistributorContactEmail', 'MethodOfDeliveryId', 'MethodOfDeliveryDesc']
+
+Filtered for CBA LONG ISLAND: (1435, 49)
+
+Sample of filtered data with combined store name:
+   ZipRoute CombinedStoreName  Pieces OrderStatusDesc InHomeEndDate
+29   11040C               NaN    4612         Revised       4/11/25
+30   11040D               NaN    5224         Revised       4/11/25
+31   11501Z               NaN    8736         Revised       4/11/25
+32   11801C               NaN    4435         Revised       4/11/25
+33   11801D               NaN    4484         Revised       4/11/25
+
+Extracting ZIP codes from ZipRoute:
+   ZipRoute ZipCode
+29   11040C   11040
+30   11040D   11040
+31   11501Z   11501
+32   11801C   11801
+33   11801D   11801
+
+Saved sample of 20 rows to cba_sample.csv

@@ -1,0 +1,336 @@
+{% extends 'base.html' %}
+
+{% block title %}Production Scheduler - View Schedule{% endblock %}
+
+{% block extra_css %}
+<style>
+    .machine-card {
+        margin-bottom: 2rem;
+    }
+    .stats-card {
+        margin-bottom: 2rem;
+    }
+    .zip-badge {
+        font-size: 0.9rem;
+        margin-right: 5px;
+        margin-bottom: 5px;
+    }
+    .reused-count {
+        font-weight: bold;
+        color: #28a745;
+    }
+    .reuse-indicator {
+        display: inline-block;
+        background-color: #f8f9fa;
+        color: #28a745;
+        font-weight: bold;
+        padding: 0 4px;
+        border-radius: 50%;
+        margin-left: 2px;
+    }
+    .table-metrics th, .table-metrics td {
+        text-align: center;
+    }
+    .machine-info-box {
+        background-color: #f8f9fa;
+        border-radius: 4px;
+        padding: 10px;
+        margin-bottom: 15px;
+    }
+    .insert-overlap-visualizer {
+        height: 3px;
+        background: linear-gradient(to right, #dc3545, #ffc107, #28a745);
+        margin: 5px 0;
+        border-radius: 3px;
+    }
+</style>
+{% endblock %}
+
+{% block content %}
+<div class="row">
+    <div class="col-md-12">
+        <h2>Production Schedule</h2>
+        <p class="lead">View the optimized production schedule for your machines.</p>
+        <hr>
+    </div>
+</div>
+
+<div class="row">
+    <div class="col-md-4">
+        <div class="card stats-card">
+            <div class="card-header bg-primary text-white">
+                <h5 class="mb-0">Schedule Summary</h5>
+            </div>
+            <div class="card-body">
+                <p><strong>Total ZIP Codes:</strong> {{ schedule.statistics.total_zips }}</p>
+                <p><strong>Total Inserts:</strong> <span class="reused-count">{{ schedule.statistics.total_inserts }}</span></p>
+                <p><strong>Schedule Date:</strong> {{ schedule.statistics.date }}</p>
+            </div>
+        </div>
+        
+        <div class="card mt-3">
+            <div class="card-header bg-info text-white">
+                <h5 class="mb-0">Insert Continuity Metrics</h5>
+            </div>
+            <div class="card-body">
+                <table class="table table-striped table-bordered table-metrics">
+                    <thead>
+                        <tr>
+                            <th>Machine</th>
+                            <th>ZIPs</th>
+                            <th>Inserts</th>
+                            <th>Reused</th>
+                            <th>Efficiency</th>
+                        </tr>
+                    </thead>
+                    <tbody id="metricsTableBody">
+                        <!-- Filled by JavaScript -->
+                    </tbody>
+                </table>
+            </div>
+        </div>
+    </div>
+    
+    <div class="col-md-8">
+        <div class="row">
+            <div class="col-md-12">
+                <div class="card mb-3">
+                    <div class="card-header bg-success text-white">
+                        <h5 class="mb-0">Insert Continuity Visualization</h5>
+                    </div>
+                    <div class="card-body">
+                        <div class="row">
+                            <div class="col-md-6">
+                                <canvas id="reuseCountChart"></canvas>
+                            </div>
+                            <div class="col-md-6">
+                                <canvas id="efficiencyChart"></canvas>
+                            </div>
+                        </div>
+                    </div>
+                </div>
+            </div>
+            
+            <!-- Machine cards -->
+            {% for machine in schedule.machines %}
+            <div class="col-md-12">
+                <div class="card machine-card">
+                    <div class="card-header bg-success text-white">
+                        <h5 class="mb-0">{{ machine.name }}</h5>
+                    </div>
+                    <div class="card-body">
+                        <div class="machine-info-box">
+                            <div class="row">
+                                <div class="col-md-6">
+                                    <p><strong>ZIP Codes Assigned:</strong> {{ machine.zips|length }}</p>
+                                </div>
+                                <div class="col-md-6">
+                                    <p><strong>Total Inserts:</strong> 
+                                        <span class="reused-count">{{ machine.total_inserts }}</span>
+                                    </p>
+                                </div>
+                            </div>
+                            <div class="insert-overlap-visualizer"></div>
+                        </div>
+                        
+                        <h6 class="mt-3">ZIP Code Sequence:</h6>
+                        <div class="zip-sequence mb-3">
+                            {% for zip in machine.zips %}
+                                <span class="badge bg-primary zip-badge">
+                                    {{ zip.zip_code }}
+                                    {% if loop.index > 1 %}
+                                        {% set prev_inserts = machine.zips[loop.index0-1].inserts %}
+                                        {% set curr_inserts = zip.inserts %}
+                                        {% set common = 0 %}
+                                        {% for insert in curr_inserts %}
+                                            {% if insert in prev_inserts %}
+                                                {% set common = common + 1 %}
+                                            {% endif %}
+                                        {% endfor %}
+                                        {% if common > 0 %}
+                                            <span class="reuse-indicator">{{common}}</span>
+                                        {% endif %}
+                                    {% endif %}
+                                </span>
+                            {% endfor %}
+                        </div>
+                        
+                        <a href="{{ url_for('machine_detail', machine_id=loop.index) }}" class="btn btn-primary">View Machine Details</a>
+                    </div>
+                </div>
+            </div>
+            {% endfor %}
+        </div>
+    </div>
+</div>
+{% endblock %}
+
+{% block extra_js %}
+<script>
+    document.addEventListener('DOMContentLoaded', function() {
+        // Prepare data for the reuse efficiency chart
+        const machines = {{ schedule.machines|tojson|safe }};
+        const machineNames = machines.map(machine => machine.name);
+        
+        const machineStats = machines.map(machine => {
+            let totalInserts = 0;
+            let totalReused = 0;
+            let transitions = 0;
+            const zips = machine.zips;
+            
+            zips.forEach((zip, index) => {
+                totalInserts += zip.inserts.length;
+                // Use the inserts_reused property if it exists, otherwise calculate
+                if (index > 0) {
+                    if (zip.inserts_reused !== undefined) {
+                        // Use the precalculated value if available
+                        totalReused += (typeof zip.inserts_reused === 'number') ? 
+                            zip.inserts_reused : parseInt(zip.inserts_reused) || 0;
+                    } else {
+                        // Otherwise calculate it
+                        const prevInserts = zips[index-1].inserts;
+                        const currentInserts = zip.inserts;
+                        // Find common elements
+                        let commonCount = 0;
+                        for (const insert of currentInserts) {
+                            if (prevInserts.includes(insert)) {
+                                commonCount++;
+                            }
+                        }
+                        totalReused += commonCount;
+                    }
+                    transitions += 1;
+                }
+            });
+            
+            // Calculate efficiency percentage
+            const avgInsertsPerZip = totalInserts / zips.length;
+            // We can't reuse more than the minimum between consecutive zips
+            const theoreticalMaxReuse = transitions * avgInsertsPerZip * 0.6; // Approximation
+            const efficiencyPercentage = (totalReused / theoreticalMaxReuse * 100).toFixed(1);
+            
+            return {
+                name: machine.name,
+                assignments: zips.length,
+                totalInserts: machine.total_inserts || totalInserts,
+                totalReused: totalReused,
+                efficiencyPercentage: isNaN(efficiencyPercentage) ? 0 : efficiencyPercentage
+            };
+        });
+        
+        // Create the reuse count chart
+        const ctxCount = document.getElementById('reuseCountChart').getContext('2d');
+        const reuseCountChart = new Chart(ctxCount, {
+            type: 'bar',
+            data: {
+                labels: machineNames,
+                datasets: [{
+                    label: 'Inserts Reused',
+                    data: machineStats.map(stats => stats.totalReused),
+                    backgroundColor: [
+                        'rgba(75, 192, 192, 0.6)',
+                        'rgba(54, 162, 235, 0.6)',
+                        'rgba(153, 102, 255, 0.6)'
+                    ],
+                    borderColor: [
+                        'rgba(75, 192, 192, 1)',
+                        'rgba(54, 162, 235, 1)',
+                        'rgba(153, 102, 255, 1)'
+                    ],
+                    borderWidth: 1
+                }]
+            },
+            options: {
+                scales: {
+                    y: {
+                        beginAtZero: true,
+                        title: {
+                            display: true,
+                            text: 'Number of Inserts Reused'
+                        }
+                    }
+                },
+                plugins: {
+                    title: {
+                        display: true,
+                        text: 'Total Inserts Reused by Machine'
+                    }
+                }
+            }
+        });
+        
+        // Create the efficiency percentage chart
+        const ctxEfficiency = document.getElementById('efficiencyChart').getContext('2d');
+        const efficiencyChart = new Chart(ctxEfficiency, {
+            type: 'bar',
+            data: {
+                labels: machineNames,
+                datasets: [{
+                    label: 'Reuse Efficiency %',
+                    data: machineStats.map(stats => stats.efficiencyPercentage),
+                    backgroundColor: [
+                        'rgba(255, 159, 64, 0.6)',
+                        'rgba(255, 99, 132, 0.6)',
+                        'rgba(75, 192, 192, 0.6)'
+                    ],
+                    borderColor: [
+                        'rgba(255, 159, 64, 1)',
+                        'rgba(255, 99, 132, 1)',
+                        'rgba(75, 192, 192, 1)'
+                    ],
+                    borderWidth: 1
+                }]
+            },
+            options: {
+                scales: {
+                    y: {
+                        beginAtZero: true,
+                        max: 100,
+                        title: {
+                            display: true,
+                            text: 'Efficiency Percentage (%)'
+                        }
+                    }
+                },
+                plugins: {
+                    title: {
+                        display: true,
+                        text: 'Insert Continuity Efficiency by Machine'
+                    }
+                }
+            }
+        });
+        
+        // Update the metrics table
+        const metricsTableBody = document.getElementById('metricsTableBody');
+        machineStats.forEach(stats => {
+            const row = document.createElement('tr');
+            row.innerHTML = `
+                <td>${stats.name}</td>
+                <td>${stats.assignments}</td>
+                <td>${stats.totalInserts}</td>
+                <td>${stats.totalReused}</td>
+                <td>${stats.efficiencyPercentage}%</td>
+            `;
+            metricsTableBody.appendChild(row);
+        });
+        
+        // Add a total row
+        const totalRow = document.createElement('tr');
+        const totalAssignments = machineStats.reduce((sum, stats) => sum + stats.assignments, 0);
+        const totalInserts = machineStats.reduce((sum, stats) => sum + stats.totalInserts, 0);
+        const totalReused = machineStats.reduce((sum, stats) => sum + stats.totalReused, 0);
+        const overallEfficiency = (totalReused / (totalAssignments * 0.6 * (totalInserts / totalAssignments)) * 100).toFixed(1);
+        
+        totalRow.classList.add('table-primary', 'fw-bold');
+        totalRow.innerHTML = `
+            <td>Overall</td>
+            <td>${totalAssignments}</td>
+            <td>${totalInserts}</td>
+            <td>${totalReused}</td>
+            <td>${isNaN(overallEfficiency) ? 0 : overallEfficiency}%</td>
+        `;
+        metricsTableBody.appendChild(totalRow);
+    });
+</script>
+{% endblock %}

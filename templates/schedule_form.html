@@ -1,0 +1,63 @@
+{% extends 'base.html' %}
+
+{% block title %}Production Scheduler - Generate Schedule{% endblock %}
+
+{% block content %}
+<div class="row">
+    <div class="col-md-12">
+        <h2>Generate Production Schedule</h2>
+        <p class="lead">Create an optimized production schedule for your machines.</p>
+        <hr>
+    </div>
+</div>
+
+<div class="row">
+    <div class="col-md-8">
+        <div class="card">
+            <div class="card-header">
+                <h5>Scheduling Options</h5>
+            </div>
+            <div class="card-body">
+                <form method="POST">
+                    <div class="mb-3">
+                        <label for="day" class="form-label">Schedule Day</label>
+                        <select class="form-select" id="day" name="day">
+                            <option value="all" selected>All Days</option>
+                            <option value="MON">Monday Only</option>
+                            <option value="TUE">Tuesday Only</option>
+                        </select>
+                        <div class="form-text">Select which day(s) to include in the schedule.</div>
+                    </div>
+                    <button type="submit" class="btn btn-primary">Generate Schedule</button>
+                </form>
+            </div>
+        </div>
+    </div>
+    <div class="col-md-4">
+        <div class="card">
+            <div class="card-header">
+                <h5>Scheduling Algorithm</h5>
+            </div>
+            <div class="card-body">
+                <p>The scheduling algorithm works by:</p>
+                <ul>
+                    <li>Analyzing the inserts required for each zip code</li>
+                    <li>Calculating the overlap between consecutive zip codes</li>
+                    <li>Assigning zip codes to machines to maximize insert continuity</li>
+                    <li>Generating pocket change instructions for operators</li>
+                </ul>
+                <p>This approach minimizes the need to change inserts between jobs, improving operational efficiency.</p>
+            </div>
+        </div>
+    </div>
+</div>
+
+<div class="row mt-4">
+    <div class="col-md-12">
+        <div class="alert alert-info">
+            <h5>Note:</h5>
+            <p>Make sure you have uploaded the Insert Orders file before generating a schedule. The system will use the Zips by Address File Group to determine if a ZIP is scheduled for Monday or Tuesday.</p>
+        </div>
+    </div>
+</div>
+{% endblock %}

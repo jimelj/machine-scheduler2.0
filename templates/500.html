@@ -1,0 +1,14 @@
+{% extends 'base.html' %}
+
+{% block title %}Production Scheduler - Server Error{% endblock %}
+
+{% block content %}
+<div class="row">
+    <div class="col-md-12 text-center">
+        <h1 class="display-1">500</h1>
+        <h2>Server Error</h2>
+        <p class="lead">Something went wrong on our end. Please try again later.</p>
+        <a href="{{ url_for('index') }}" class="btn btn-primary">Return to Home</a>
+    </div>
+</div>
+{% endblock %}

@@ -1,0 +1,66 @@
+body {
+    font-family: 'Roboto', sans-serif;
+    background-color: #f5f5f5;
+}
+
+.navbar {
+    box-shadow: 0 2px 4px rgba(0, 0, 0, 0.1);
+}
+
+.card {
+    box-shadow: 0 2px 4px rgba(0, 0, 0, 0.1);
+    margin-bottom: 20px;
+}
+
+.card-header {
+    font-weight: bold;
+}
+
+.jumbotron {
+    background-color: #f8f9fa;
+    border-radius: 0.3rem;
+}
+
+.footer {
+    border-top: 1px solid #e9ecef;
+}
+
+/* Custom styles for machine visualization */
+.pocket {
+    display: flex;
+    flex-direction: column;
+    justify-content: center;
+    align-items: center;
+    box-shadow: 0 2px 4px rgba(0, 0, 0, 0.1);
+}
+
+.pocket:hover {
+    transform: translateY(-5px);
+    box-shadow: 0 5px 15px rgba(0, 0, 0, 0.1);
+}
+
+.zip-badge {
+    cursor: pointer;
+    transition: all 0.3s ease;
+}
+
+.zip-badge:hover {
+    transform: scale(1.05);
+}
+
+.zip-badge.active {
+    transform: scale(1.1);
+}
+
+/* Responsive adjustments */
+@media (max-width: 768px) {
+    .pocket-container {
+        grid-template-columns: repeat(2, 1fr);
+    }
+}
+
+@media (max-width: 576px) {
+    .pocket-container {
+        grid-template-columns: repeat(1, 1fr);
+    }
+}
