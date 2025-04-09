@@ -359,14 +359,14 @@
             assignmentsData.forEach((assignment, index) => {
                 const zipCode = assignment.zip_code;
                 const sequence = index + 1;
+                const targetInserts = new Set(assignment.inserts);
                 
                 // Get unique list of inserts needed for this ZIP code
-                const targetInsertSet = new Set(assignment.inserts);
-                const targetInserts = Array.from(targetInsertSet);
+                const currentInserts = new Set(Object.values(machineState));
                 
                 // If this is the first ZIP code, simply fill pockets with initial inserts
                 if (index === 0) {
-                    targetInserts.forEach((insert, i) => {
+                    Array.from(targetInserts).forEach((insert, i) => {
                         if (i < 16) { // Max 16 pockets
                             const pocket = i + 1;
                             changes.push({
@@ -382,121 +382,65 @@
                     return; // Skip to next ZIP code
                 }
                 
-                // For subsequent ZIP codes, handle transitions intelligently
+                // For subsequent ZIP codes:
+                // 1. First identify which inserts to keep (exact matches only)
+                const inserts_to_keep = new Set([...currentInserts].filter(x => targetInserts.has(x)));
+                const pockets_to_keep = new Map(); // insert → pocket_number
                 
-                // STEP 1: Create map of inserts to their current pocket locations
-                const currentInsertLocations = {};
+                // Find one pocket for each insert we want to keep
                 Object.entries(machineState).forEach(([pocket, insert]) => {
-                    if (!currentInsertLocations[insert]) {
-                        currentInsertLocations[insert] = [];
-                    }
-                    currentInsertLocations[insert].push(parseInt(pocket));
-                });
-                
-                // STEP 2: Make explicit decisions for each pocket
-                const pocketDecisions = {}; // Will track what to do with each pocket
-                
-                // STEP 2A: For each needed insert, decide which pocket(s) to keep
-                const keptInserts = new Set(); // Track which inserts we've decided to keep
-                
-                targetInserts.forEach(insert => {
-                    // If this insert is already in any pocket
-                    if (currentInsertLocations[insert] && currentInsertLocations[insert].length > 0) {
-                        // Keep only the first pocket that has this insert
-                        const pocketToKeep = currentInsertLocations[insert][0];
-                        pocketDecisions[pocketToKeep] = { action: 'keep', insert: insert };
-                        keptInserts.add(insert);
-                        
-                        // Mark any additional pockets with the same insert for removal
-                        currentInsertLocations[insert].slice(1).forEach(pocket => {
-                            pocketDecisions[pocket] = { action: 'remove', insert: insert };
-                        });
+                    if (inserts_to_keep.has(insert) && !Array.from(pockets_to_keep.keys()).includes(insert)) {
+                        pockets_to_keep.set(insert, parseInt(pocket));
                     }
                 });
                 
-                // STEP 2B: Decide what to do with pockets that have inserts we don't need
+                // 2. Mark pockets for keeping
+                const newPocketState = {};
+                pockets_to_keep.forEach((pocket, insert) => {
+                    changes.push({
+                        zip_code: zipCode,
+                        sequence: sequence,
+                        action: 'keep',
+                        pocket: pocket,
+                        insert: insert
+                    });
+                    newPocketState[pocket] = insert;
+                });
+                
+                // 3. Mark remaining current pockets for removal
                 Object.entries(machineState).forEach(([pocket, insert]) => {
-                    const pocketNum = parseInt(pocket);
-                    
-                    // Skip pockets we've already made decisions for
-                    if (pocketDecisions[pocketNum]) return;
-                    
-                    // If pocket has an insert not needed for this ZIP, mark it for removal
-                    if (!targetInsertSet.has(insert)) {
-                        pocketDecisions[pocketNum] = { action: 'remove', insert: insert };
-                    }
-                });
-                
-                // STEP 3: Find inserts that we still need to add
-                const insertsNeeded = targetInserts.filter(insert => !keptInserts.has(insert));
-                
-                // STEP 4: Find available pockets (those we're emptying or that are already empty)
-                const availablePockets = [];
-                
-                // First add pockets we're emptying
-                Object.entries(pocketDecisions).forEach(([pocket, decision]) => {
-                    if (decision.action === 'remove') {
-                        availablePockets.push(parseInt(pocket));
-                    }
-                });
-                
-                // Then add any pockets that are already empty
-                for (let p = 1; p <= 16; p++) {
-                    if (!machineState[p] && !availablePockets.includes(p)) {
-                        availablePockets.push(p);
-                    }
-                }
-                
-                // STEP 5: Create planned 'add' actions for needed inserts
-                insertsNeeded.forEach((insert, idx) => {
-                    if (idx < availablePockets.length) {
-                        const pocket = availablePockets[idx];
-                        pocketDecisions[pocket] = { action: 'add', insert: insert };
-                    }
-                });
-                
-                // STEP 6: Now generate all changes and update machine state
-                
-                // Process keeps first (no change to machine state)
-                Object.entries(pocketDecisions).forEach(([pocket, decision]) => {
-                    if (decision.action === 'keep') {
-                        changes.push({
-                            zip_code: zipCode,
-                            sequence: sequence,
-                            action: 'keep',
-                            pocket: parseInt(pocket),
-                            insert: decision.insert
-                        });
-                    }
-                });
-                
-                // Then process removals (update machine state)
-                Object.entries(pocketDecisions).forEach(([pocket, decision]) => {
-                    if (decision.action === 'remove') {
+                    if (!(pocket in newPocketState)) {
                         changes.push({
                             zip_code: zipCode,
                             sequence: sequence,
                             action: 'remove',
                             pocket: parseInt(pocket),
-                            insert: decision.insert
+                            insert: insert
                         });
-                        delete machineState[pocket]; // Remove insert from tracking
                     }
                 });
                 
-                // Finally process additions (update machine state)
-                Object.entries(pocketDecisions).forEach(([pocket, decision]) => {
-                    if (decision.action === 'add') {
+                // 4. Add new inserts to available pockets
+                const inserts_to_add = Array.from(targetInserts).filter(x => !inserts_to_keep.has(x));
+                const available_pockets = Array.from({length: 16}, (_, i) => i + 1)
+                    .filter(p => !(p in newPocketState));
+                
+                inserts_to_add.forEach((insert, idx) => {
+                    if (idx < available_pockets.length) {
+                        const pocket = available_pockets[idx];
                         changes.push({
                             zip_code: zipCode,
                             sequence: sequence,
                             action: 'add',
-                            pocket: parseInt(pocket),
-                            insert: decision.insert
+                            pocket: pocket,
+                            insert: insert
                         });
-                        machineState[pocket] = decision.insert; // Add insert to tracking
+                        newPocketState[pocket] = insert;
                     }
                 });
+                
+                // Update machine state for next iteration
+                Object.assign(machineState, newPocketState);
             });
             
             return changes;

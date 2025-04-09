@@ -597,91 +597,82 @@ class SchedulingAlgorithm:
         for machine_id, assignments in schedule['machine_assignments'].items():
             machine_id_str = str(machine_id)
             pocket_changes[machine_id_str] = []
-            current_pockets = {}
+            current_pockets = {}  # pocket_number -> insert_name
             
             for i, assignment in enumerate(assignments):
                 zip_code = assignment['zip_code']
-                sequence = int(assignment['sequence'])  # Convert to regular Python int
+                sequence = int(assignment['sequence'])
+                current_inserts = set(current_pockets.values())
+                target_inserts = set(assignment['inserts'])
                 
-                # Convert inserts to a list if it's a set
-                inserts = assignment['inserts']
-                if isinstance(inserts, set):
-                    inserts = list(inserts)
-                
-                # For the first assignment, all inserts are new
+                # For the first ZIP code, simply add inserts to empty pockets
                 if i == 0:
-                    changes = [{
-                        'zip_code': zip_code,
-                        'sequence': sequence,
-                        'action': 'add',
-                        'pocket': p + 1,
-                        'insert': insert
-                    } for p, insert in enumerate(inserts) if p < self.pockets_per_machine]
-                    
-                    # Update current pockets
-                    for p, insert in enumerate(inserts):
-                        if p < self.pockets_per_machine:
-                            current_pockets[p + 1] = insert
-                else:
-                    # Calculate which inserts to keep, add, and remove
-                    current_inserts = set(current_pockets.values())
-                    new_inserts = set(inserts)
-                    
-                    inserts_to_keep = current_inserts.intersection(new_inserts)
-                    inserts_to_add = new_inserts - current_inserts
-                    inserts_to_remove = current_inserts - new_inserts
-                    
-                    changes = []
-                    
-                    # Remove inserts that are no longer needed
-                    for pocket, insert in list(current_pockets.items()):
-                        if insert in inserts_to_remove:
-                            changes.append({
-                                'zip_code': zip_code,
-                                'sequence': sequence,
-                                'action': 'remove',
-                                'pocket': int(pocket),  # Convert to regular Python int
-                                'insert': insert
-                            })
-                            del current_pockets[pocket]
-                    
-                    # Add new inserts to freed pockets
-                    freed_pockets = [p for p, i in list(current_pockets.items()) if i in inserts_to_remove]
-                    new_inserts_list = list(inserts_to_add)
-                    
-                    for i, pocket in enumerate(freed_pockets):
-                        if i < len(new_inserts_list):
-                            insert = new_inserts_list[i]
-                            changes.append({
+                    for idx, insert in enumerate(target_inserts):
+                        if idx < self.pockets_per_machine:
+                            pocket_num = idx + 1
+                            current_pockets[pocket_num] = insert
+                            pocket_changes[machine_id_str].append({
                                 'zip_code': zip_code,
                                 'sequence': sequence,
                                 'action': 'add',
-                                'pocket': int(pocket),  # Convert to regular Python int
+                                'pocket': pocket_num,
                                 'insert': insert
                             })
-                            current_pockets[pocket] = insert
-                    
-                    # If we need more pockets than were freed, use empty pockets
-                    if len(new_inserts_list) > len(freed_pockets):
-                        remaining_inserts = new_inserts_list[len(freed_pockets):]
-                        used_pockets = set(current_pockets.keys())
-                        empty_pockets = [p for p in range(1, self.pockets_per_machine + 1) 
-                                        if p not in used_pockets]
-                        
-                        for i, pocket in enumerate(empty_pockets):
-                            if i < len(remaining_inserts):
-                                insert = remaining_inserts[i]
-                                changes.append({
-                                    'zip_code': zip_code,
-                                    'sequence': sequence,
-                                    'action': 'add',
-                                    'pocket': int(pocket),  # Convert to regular Python int
-                                    'insert': insert
-                                })
-                                current_pockets[pocket] = insert
+                    continue
                 
+                # For subsequent ZIP codes:
+                # 1. First identify which inserts to keep (exact matches only)
+                inserts_to_keep = current_inserts.intersection(target_inserts)
+                pockets_to_keep = {}  # insert -> pocket_number
+                
+                # Find one pocket for each insert we want to keep
+                for pocket_num, insert in current_pockets.items():
+                    if insert in inserts_to_keep and insert not in pockets_to_keep:
+                        pockets_to_keep[insert] = pocket_num
+                
+                # 2. Mark pockets for keeping
+                changes = []
+                new_pocket_state = {}
+                for insert, pocket_num in pockets_to_keep.items():
+                    changes.append({
+                        'zip_code': zip_code,
+                        'sequence': sequence,
+                        'action': 'keep',
+                        'pocket': pocket_num,
+                        'insert': insert
+                    })
+                    new_pocket_state[pocket_num] = insert
+                
+                # 3. Mark remaining current pockets for removal
+                for pocket_num, insert in current_pockets.items():
+                    if pocket_num not in new_pocket_state:
+                        changes.append({
+                            'zip_code': zip_code,
+                            'sequence': sequence,
+                            'action': 'remove',
+                            'pocket': pocket_num,
+                            'insert': insert
+                        })
+                
+                # 4. Add new inserts to available pockets
+                inserts_to_add = target_inserts - inserts_to_keep
+                available_pockets = [p for p in range(1, self.pockets_per_machine + 1)
+                                   if p not in new_pocket_state]
+                
+                for insert, pocket_num in zip(inserts_to_add, available_pockets):
+                    changes.append({
+                        'zip_code': zip_code,
+                        'sequence': sequence,
+                        'action': 'add',
+                        'pocket': pocket_num,
+                        'insert': insert
+                    })
+                    new_pocket_state[pocket_num] = insert
+                
+                # Update current pocket state for next iteration
+                current_pockets = new_pocket_state
                 pocket_changes[machine_id_str].extend(changes)
-                
+        
         return pocket_changes
 
     def generate_schedule(self):
