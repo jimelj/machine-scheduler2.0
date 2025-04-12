@@ -1,0 +1,718 @@
+{% extends 'base.html' %}
+
+{% block title %}{{ title }} - Map View{% endblock %}
+
+{% block extra_css %}
+<style>
+    #map {
+        height: 750px;
+        width: 100%;
+        border-radius: 4px;
+        border: 1px solid #ccc;
+        margin-bottom: 20px;
+    }
+    
+    .legend {
+        padding: 10px;
+        background-color: white;
+        border-radius: 4px;
+        box-shadow: 0 1px 4px rgba(0,0,0,0.2);
+        margin-bottom: 10px;
+    }
+    
+    .legend-item {
+        display: flex;
+        align-items: center;
+        margin-bottom: 5px;
+    }
+    
+    .legend-color {
+        width: 16px;
+        height: 16px;
+        border-radius: 50%;
+        display: inline-block;
+        margin-right: 5px;
+    }
+    
+    .day-mon {
+        background-color: #ffc107;
+        color: #000;
+        font-weight: bold;
+        padding: 2px 8px;
+        border-radius: 4px;
+        display: inline-block;
+        margin-right: 10px;
+    }
+    
+    .day-tue {
+        background-color: #17a2b8;
+        color: white;
+        font-weight: bold;
+        padding: 2px 8px;
+        border-radius: 4px;
+        display: inline-block;
+        margin-right: 10px;
+    }
+    
+    .machine-info {
+        position: absolute;
+        top: 10px;
+        right: 10px;
+        z-index: 1000;
+        background-color: white;
+        padding: 5px 10px;
+        border-radius: 4px;
+        box-shadow: 0 1px 4px rgba(0,0,0,0.2);
+        font-size: 0.8rem;
+    }
+    
+    .zip-grid {
+        display: grid;
+        grid-template-columns: repeat(auto-fill, minmax(180px, 1fr));
+        gap: 10px;
+    }
+    
+    .zip-item {
+        border: 1px solid #dee2e6;
+        border-radius: 4px;
+        padding: 8px;
+        background-color: #f8f9fa;
+        transition: all 0.2s ease;
+    }
+    
+    .zip-item:hover {
+        background-color: #e9ecef;
+        cursor: pointer;
+        transform: translateY(-2px);
+        box-shadow: 0 2px 4px rgba(0,0,0,0.1);
+    }
+    
+    .zip-item.active {
+        background-color: #007bff;
+        color: white;
+        border-color: #0056b3;
+    }
+    
+    .zip-item.active .badge {
+        background-color: white !important;
+        color: #007bff !important;
+    }
+    
+    .accordion-button:not(.collapsed) {
+        background-color: rgba(0, 123, 255, 0.1);
+        color: #0d6efd;
+    }
+    
+    .zip-count-badge {
+        font-size: 0.7rem;
+        vertical-align: middle;
+        margin-left: 5px;
+    }
+</style>
+<link rel="stylesheet" href="https://unpkg.com/leaflet@1.9.4/dist/leaflet.css" 
+      integrity="sha256-p4NxAoJBhIIN+hmNHrzRCf9tD/miZyoHS5obTRR9BMY=" 
+      crossorigin=""/>
+{% endblock %}
+
+{% block content %}
+<div class="row">
+    <div class="col-md-12">
+        <h2>{{ title }}</h2>
+        <div class="d-flex justify-content-between align-items-center mb-3">
+            <p class="lead">Interactive map of ZIP codes assigned to machines.</p>
+            <a href="{{ url_for('view_schedule') }}" class="btn btn-secondary">Back to Schedule</a>
+        </div>
+        <hr>
+    </div>
+</div>
+
+<div class="row">
+    <div class="col-md-2">
+        <div class="card mb-4">
+            <div class="card-header bg-primary text-white">
+                <h5 class="mb-0">Filters</h5>
+            </div>
+            <div class="card-body">
+                <!-- Machine filter -->
+                <div class="mb-2">
+                    <label class="form-label small">Machine:</label>
+                    <div class="btn-group-vertical w-100" role="group">
+                        <a href="{{ url_for('view_zip_map') }}" class="btn btn-sm mb-1 py-1 btn-{% if machine_id is none %}primary{% else %}outline-primary{% endif %}">All Machines</a>
+                        {% for id, name in machine_names.items()|sort %}
+                        <a href="{{ url_for('view_zip_map', machine_id=id) }}" 
+                           class="btn btn-sm mb-1 py-1 btn-{% if machine_id == id %}primary{% else %}outline-primary{% endif %}"
+                           id="machine-btn-{{ id }}">
+                            {{ name }}
+                        </a>
+                        {% endfor %}
+                    </div>
+                </div>
+                
+                <!-- Delivery day filter -->
+                <div class="mb-2">
+                    <label class="form-label small">Delivery Day:</label>
+                    <div class="btn-group w-100" role="group">
+                        <button class="btn btn-sm btn-outline-warning py-1" id="filter-mon" style="flex: 1;">Mon</button>
+                        <button class="btn btn-sm btn-outline-info py-1" id="filter-tue" style="flex: 1;">Tue</button>
+                        <button class="btn btn-sm btn-outline-secondary py-1" id="filter-all" style="flex: 1;">All</button>
+                    </div>
+                </div>
+                
+                <!-- Legend -->
+                <div class="mt-3">
+                    <h6 class="small">Legend:</h6>
+                    <div class="legend-item">
+                        <span class="legend-color" style="background-color: #ffc107;"></span>
+                        <span class="small">Monday Delivery</span>
+                    </div>
+                    <div class="legend-item">
+                        <span class="legend-color" style="background-color: #17a2b8;"></span>
+                        <span class="small">Tuesday Delivery</span>
+                    </div>
+                    <div class="mt-2 text-muted small">
+                        Numbers show sequence order.
+                    </div>
+                </div>
+            </div>
+        </div>
+    </div>
+    
+    <div class="col-md-10">
+        <!-- Map container -->
+        <div id="map"></div>
+        
+        <div class="alert alert-info">
+            <p><strong>Note:</strong> ZIP code coordinates are approximate and based on centroid calculations.</p>
+            <p class="mb-0">ZIP codes that cannot be geocoded will not appear on the map.</p>
+        </div>
+    </div>
+</div>
+
+<!-- ZIP codes accordion section at the bottom -->
+<div class="row mt-4">
+    <div class="col-12">
+        <div class="card">
+            <div class="card-header bg-success text-white d-flex justify-content-between align-items-center">
+                <h5 class="mb-0">ZIP Codes by Machine ({{ zips|length }} total)</h5>
+                <div>
+                    <button id="expandAllBtn" class="btn btn-sm btn-light">Expand All</button>
+                </div>
+            </div>
+            <div class="card-body">
+                <div class="accordion" id="zipCodesAccordion">
+                    {% if machine_id is none %}
+                        {% for machine_id, name in machine_names.items()|sort %}
+                            {% set machine_zips = zips|selectattr('machine_id', 'equalto', machine_id)|list %}
+                            {% if machine_zips|length > 0 %}
+                                <div class="accordion-item">
+                                    <h2 class="accordion-header" id="heading{{ machine_id }}">
+                                        <button class="accordion-button collapsed" type="button" 
+                                                data-bs-toggle="collapse" data-bs-target="#collapse{{ machine_id }}" 
+                                                aria-expanded="false" aria-controls="collapse{{ machine_id }}">
+                                            {{ name }} <span class="badge bg-primary zip-count-badge">{{ machine_zips|length }} ZIPs</span>
+                                        </button>
+                                    </h2>
+                                    <div id="collapse{{ machine_id }}" class="accordion-collapse collapse" 
+                                         aria-labelledby="heading{{ machine_id }}" data-bs-parent="#zipCodesAccordion">
+                                        <div class="accordion-body">
+                                            <div class="table-responsive">
+                                                <table class="table table-striped table-hover">
+                                                    <thead>
+                                                        <tr>
+                                                            <th>ZIP Code</th>
+                                                            <th>Delivery Day</th>
+                                                            <th>Segments</th>
+                                                            <th>Insert Count</th>
+                                                        </tr>
+                                                    </thead>
+                                                    <tbody>
+                                                        {% for zip in machine_zips|sort(attribute='sequence') %}
+                                                        <tr class="zip-list-item" 
+                                                            data-zip="{{ zip.zip_code }}" 
+                                                            data-mailday="{{ zip.mailday }}"
+                                                            data-machine="{{ zip.machine_id }}">
+                                                            <td><strong>{{ zip.zip_code }}</strong></td>
+                                                            <td>
+                                                                {% if zip.mailday == 'MON' %}
+                                                                <span class="badge bg-warning text-dark">Monday</span>
+                                                                {% elif zip.mailday == 'TUE' %}
+                                                                <span class="badge bg-info text-white">Tuesday</span>
+                                                                {% else %}
+                                                                <span class="badge bg-secondary">{{ zip.mailday }}</span>
+                                                                {% endif %}
+                                                            </td>
+                                                            <td>
+                                                                {% if zip.segments %}
+                                                                    {% for segment in zip.segments %}
+                                                                    <span class="badge bg-secondary me-1">{{ segment }}</span>
+                                                                    {% endfor %}
+                                                                {% else %}
+                                                                    <span class="text-muted">-</span>
+                                                                {% endif %}
+                                                            </td>
+                                                            <td>{{ zip.insert_count|default('10', true) }}</td>
+                                                        </tr>
+                                                        {% endfor %}
+                                                    </tbody>
+                                                </table>
+                                            </div>
+                                        </div>
+                                    </div>
+                                </div>
+                            {% endif %}
+                        {% endfor %}
+                    {% else %}
+                        <div class="accordion-item">
+                            <h2 class="accordion-header" id="headingMachine">
+                                <button class="accordion-button collapsed" type="button" 
+                                        data-bs-toggle="collapse" data-bs-target="#collapseMachine" 
+                                        aria-expanded="false" aria-controls="collapseMachine">
+                                    {{ machine_names[machine_id] }} <span class="badge bg-primary zip-count-badge">{{ zips|length }} ZIPs</span>
+                                </button>
+                            </h2>
+                            <div id="collapseMachine" class="accordion-collapse collapse" 
+                                 aria-labelledby="headingMachine" data-bs-parent="#zipCodesAccordion">
+                                <div class="accordion-body">
+                                    <div class="table-responsive">
+                                        <table class="table table-striped table-hover">
+                                            <thead>
+                                                <tr>
+                                                    <th>ZIP Code</th>
+                                                    <th>Delivery Day</th>
+                                                    <th>Segments</th>
+                                                    <th>Insert Count</th>
+                                                </tr>
+                                            </thead>
+                                            <tbody>
+                                                {% for zip in zips|sort(attribute='sequence') %}
+                                                <tr class="zip-list-item" 
+                                                    data-zip="{{ zip.zip_code }}" 
+                                                    data-mailday="{{ zip.mailday }}"
+                                                    data-machine="{{ zip.machine_id }}">
+                                                    <td><strong>{{ zip.zip_code }}</strong></td>
+                                                    <td>
+                                                        {% if zip.mailday == 'MON' %}
+                                                        <span class="badge bg-warning text-dark">Monday</span>
+                                                        {% elif zip.mailday == 'TUE' %}
+                                                        <span class="badge bg-info text-white">Tuesday</span>
+                                                        {% else %}
+                                                        <span class="badge bg-secondary">{{ zip.mailday }}</span>
+                                                        {% endif %}
+                                                    </td>
+                                                    <td>
+                                                        {% if zip.segments %}
+                                                            {% for segment in zip.segments %}
+                                                            <span class="badge bg-secondary me-1">{{ segment }}</span>
+                                                            {% endfor %}
+                                                        {% else %}
+                                                            <span class="text-muted">-</span>
+                                                        {% endif %}
+                                                    </td>
+                                                    <td>{{ zip.insert_count|default('10', true) }}</td>
+                                                </tr>
+                                                {% endfor %}
+                                            </tbody>
+                                        </table>
+                                    </div>
+                                </div>
+                            </div>
+                        </div>
+                    {% endif %}
+                </div>
+            </div>
+        </div>
+    </div>
+</div>
+{% endblock %}
+
+{% block extra_js %}
+<script src="https://unpkg.com/leaflet@1.9.4/dist/leaflet.js" 
+        integrity="sha256-20nQCchB9co0qIjJZRGuk2/Z9VM+kNiyxNV1lvTlZBo=" 
+        crossorigin=""></script>
+<script>
+    document.addEventListener('DOMContentLoaded', function() {
+        // Initialize the map
+        const map = L.map('map').setView([40.7831, -73.9712], 10); // NYC area
+        
+        // Add OpenStreetMap base layer
+        L.tileLayer('https://{s}.tile.openstreetmap.org/{z}/{x}/{y}.png', {
+            attribution: '&copy; <a href="https://www.openstreetmap.org/copyright">OpenStreetMap</a> contributors'
+        }).addTo(map);
+        
+        // Storage for all polygons and markers to manage filtering
+        const allZipLayers = [];
+        const allMarkers = [];
+        
+        // Get ZIP code data
+        const zipData = {{ zips|tojson|safe }};
+        
+        // Load ZIP code GeoJSON data
+        async function loadZipCodeBoundaries() {
+            try {
+                const response = await fetch('/static/js/geodata/ny_zipcode_geo.json');
+                const geoJsonData = await response.json();
+                return geoJsonData;
+            } catch (error) {
+                console.error('Error loading ZIP code boundaries:', error);
+                return null;
+            }
+        }
+        
+        // Function to add ZIP code polygons and markers
+        async function initializeMap() {
+            const geoJsonData = await loadZipCodeBoundaries();
+            
+            if (!geoJsonData) {
+                // Fallback to old marker-based approach if GeoJSON data can't be loaded
+                Promise.all(zipData.map(zipInfo => addZipMarker(zipInfo, true)))
+                    .then(() => {
+                        // Fit bounds to all markers if we have any
+                        if (allMarkers.length > 0) {
+                            const group = L.featureGroup(allMarkers.map(m => m.marker));
+                            map.fitBounds(group.getBounds(), { padding: [30, 30] });
+                        }
+                    });
+                return;
+            }
+            
+            // Process each ZIP code in our data
+            const processedZips = [];
+            
+            zipData.forEach(zipInfo => {
+                // Find matching GeoJSON feature
+                const geoJsonFeature = geoJsonData.features.find(
+                    feature => feature.properties.ZCTA5CE10 === zipInfo.zip_code
+                );
+                
+                if (geoJsonFeature) {
+                    // Determine color based on delivery day
+                    let fillColor = '#6c757d'; // Default gray
+                    let fillOpacity = 0.5;
+                    let weight = 2;
+                    
+                    if (zipInfo.mailday === 'MON') {
+                        fillColor = '#ffc107'; // Monday - warning yellow
+                    } else if (zipInfo.mailday === 'TUE') {
+                        fillColor = '#17a2b8'; // Tuesday - info blue
+                    }
+                    
+                    // Create the polygon from GeoJSON
+                    const polygon = L.geoJSON(geoJsonFeature, {
+                        style: {
+                            fillColor: fillColor,
+                            fillOpacity: fillOpacity,
+                            color: '#000',
+                            weight: weight,
+                            opacity: 0.8
+                        }
+                    }).addTo(map);
+                    
+                    // Add popup with info
+                    const segmentsHtml = zipInfo.segments && zipInfo.segments.length ? 
+                        zipInfo.segments.map(s => `<span class="badge bg-secondary me-1">${s}</span>`).join(' ') : 
+                        '<span class="text-muted">-</span>';
+                        
+                    polygon.bindPopup(`
+                        <div class="popup-content">
+                            <strong>ZIP Code:</strong> ${zipInfo.zip_code}<br>
+                            <strong>Machine:</strong> ${zipInfo.machine_name}<br>
+                            <strong>Sequence:</strong> ${zipInfo.sequence || 'N/A'}<br>
+                            <strong>Delivery Day:</strong> ${zipInfo.mailday === 'MON' ? 'Monday' : 
+                                                           zipInfo.mailday === 'TUE' ? 'Tuesday' : 'N/A'}<br>
+                            <strong>Insert Count:</strong> ${zipInfo.insert_count || '0'}<br>
+                            <strong>Segments:</strong> ${segmentsHtml}
+                        </div>
+                    `);
+                    
+                    // Add click event to highlight corresponding ZIP in the list
+                    polygon.on('click', function(e) {
+                        // Stop propagation to prevent scrolling
+                        L.DomEvent.stopPropagation(e);
+                        
+                        // Just highlight the item in the list without scrolling or opening accordion
+                        highlightZipListItemOnly(zipInfo.zip_code);
+                    });
+                    
+                    // Store polygon information for filtering
+                    allZipLayers.push({
+                        layer: polygon,
+                        zipCode: zipInfo.zip_code,
+                        mailday: zipInfo.mailday,
+                        machine: zipInfo.machine_id
+                    });
+                    
+                    processedZips.push(zipInfo.zip_code);
+                } else {
+                    // Fallback to marker for ZIPs not found in GeoJSON
+                    addZipMarker(zipInfo);
+                }
+            });
+            
+            // Fit bounds to all polygons if we have any
+            if (allZipLayers.length > 0) {
+                const group = L.featureGroup(allZipLayers.map(z => z.layer));
+                map.fitBounds(group.getBounds(), { padding: [30, 30] });
+            }
+        }
+        
+        // Function to only highlight ZIP in list without scrolling or opening accordion
+        function highlightZipListItemOnly(zipCode) {
+            document.querySelectorAll('.zip-list-item').forEach(item => {
+                item.classList.remove('active');
+                if (item.dataset.zip === zipCode) {
+                    item.classList.add('active');
+                }
+            });
+        }
+        
+        // The original function for when ZIP list items are clicked (keeps accordion opening)
+        function highlightZipInList(zipCode) {
+            document.querySelectorAll('.zip-list-item').forEach(item => {
+                item.classList.remove('active');
+                if (item.dataset.zip === zipCode) {
+                    item.classList.add('active');
+                    
+                    // If the ZIP is in a collapsed accordion, expand it
+                    const machineAccordion = item.closest('.accordion-collapse');
+                    if (machineAccordion && !machineAccordion.classList.contains('show')) {
+                        const accordionButton = document.querySelector(`[data-bs-target="#${machineAccordion.id}"]`);
+                        if (accordionButton) {
+                            accordionButton.click();
+                        }
+                    }
+                    
+                    // Scroll into view
+                    item.scrollIntoView({ behavior: 'smooth', block: 'nearest' });
+                }
+            });
+        }
+        
+        // Fallback function for ZIP codes without boundary data
+        async function addZipMarker(zipInfo, skipBoundsUpdate = false) {
+            try {
+                // Using the ZIPopotamus API to get ZIP code coordinates
+                const response = await fetch(`https://api.zippopotam.us/us/${zipInfo.zip_code}`);
+                const data = await response.json();
+                
+                if (data && data.places && data.places.length > 0) {
+                    const place = data.places[0];
+                    const coords = {
+                        lat: parseFloat(place.latitude),
+                        lng: parseFloat(place.longitude)
+                    };
+                    
+                    // Determine marker color based on delivery day
+                    let markerColor = '#6c757d'; // Default gray
+                    if (zipInfo.mailday === 'MON') {
+                        markerColor = '#ffc107'; // Monday - warning yellow
+                    } else if (zipInfo.mailday === 'TUE') {
+                        markerColor = '#17a2b8'; // Tuesday - info blue
+                    }
+                    
+                    // Create custom marker
+                    const markerHtml = `
+                        <div style="background-color: ${markerColor}; width: 30px; height: 30px; border-radius: 50%; 
+                                    display: flex; align-items: center; justify-content: center; color: white; 
+                                    font-weight: bold; border: 2px solid white; box-shadow: 0 2px 5px rgba(0,0,0,0.3);">
+                        </div>
+                    `;
+                    
+                    const customIcon = L.divIcon({
+                        html: markerHtml,
+                        className: '',
+                        iconSize: [30, 30],
+                        iconAnchor: [15, 15]
+                    });
+                    
+                    // Create marker
+                    const marker = L.marker([coords.lat, coords.lng], {
+                        icon: customIcon,
+                        title: `ZIP: ${zipInfo.zip_code} - ${zipInfo.machine_name}`
+                    }).addTo(map);
+                    
+                    // Add popup with info
+                    const segmentsHtml = zipInfo.segments && zipInfo.segments.length ? 
+                        zipInfo.segments.map(s => `<span class="badge bg-secondary me-1">${s}</span>`).join(' ') : 
+                        '<span class="text-muted">-</span>';
+                        
+                    marker.bindPopup(`
+                        <div class="popup-content">
+                            <strong>ZIP Code:</strong> ${zipInfo.zip_code}<br>
+                            <strong>Machine:</strong> ${zipInfo.machine_name}<br>
+                            <strong>Sequence:</strong> ${zipInfo.sequence || 'N/A'}<br>
+                            <strong>Delivery Day:</strong> ${zipInfo.mailday === 'MON' ? 'Monday' : 
+                                                           zipInfo.mailday === 'TUE' ? 'Tuesday' : 'N/A'}<br>
+                            <strong>Insert Count:</strong> ${zipInfo.insert_count || '0'}<br>
+                            <strong>Segments:</strong> ${segmentsHtml}
+                        </div>
+                    `);
+                    
+                    // Store marker information for filtering
+                    allMarkers.push({
+                        marker: marker,
+                        zipCode: zipInfo.zip_code,
+                        mailday: zipInfo.mailday,
+                        machine: zipInfo.machine_id
+                    });
+                    
+                    // Add click event to highlight corresponding ZIP in the list
+                    marker.on('click', function(e) {
+                        // Stop propagation to prevent scrolling
+                        L.DomEvent.stopPropagation(e);
+                        
+                        // Just highlight the item in the list without scrolling or opening accordion
+                        highlightZipListItemOnly(zipInfo.zip_code);
+                    });
+                    
+                    return marker;
+                }
+                
+                console.warn(`No coordinates found for ZIP code ${zipInfo.zip_code}`);
+                return null;
+            } catch (error) {
+                console.error(`Error fetching coordinates for ZIP code ${zipInfo.zip_code}:`, error);
+                return null;
+            }
+        }
+        
+        // Initialize the map with polygons and markers
+        initializeMap();
+        
+        // Filter functions
+        function filterLayers(mailday = null, machine = null) {
+            // Filter polygons
+            allZipLayers.forEach(layerInfo => {
+                const matchMailday = mailday === null || layerInfo.mailday === mailday;
+                const matchMachine = machine === null || layerInfo.machine === machine;
+                
+                if (matchMailday && matchMachine) {
+                    // Show layer
+                    if (!map.hasLayer(layerInfo.layer)) {
+                        map.addLayer(layerInfo.layer);
+                    }
+                } else {
+                    // Hide layer
+                    if (map.hasLayer(layerInfo.layer)) {
+                        map.removeLayer(layerInfo.layer);
+                    }
+                }
+            });
+            
+            // Filter markers
+            allMarkers.forEach(markerInfo => {
+                const matchMailday = mailday === null || markerInfo.mailday === mailday;
+                const matchMachine = machine === null || markerInfo.machine === machine;
+                
+                if (matchMailday && matchMachine) {
+                    // Show marker
+                    if (!map.hasLayer(markerInfo.marker)) {
+                        map.addLayer(markerInfo.marker);
+                    }
+                } else {
+                    // Hide marker
+                    if (map.hasLayer(markerInfo.marker)) {
+                        map.removeLayer(markerInfo.marker);
+                    }
+                }
+            });
+        }
+        
+        // Add event listeners for filter buttons
+        document.getElementById('filter-mon').addEventListener('click', function() {
+            filterLayers('MON');
+            updateFilterButtonState(this, 'day');
+        });
+        
+        document.getElementById('filter-tue').addEventListener('click', function() {
+            filterLayers('TUE');
+            updateFilterButtonState(this, 'day');
+        });
+        
+        document.getElementById('filter-all').addEventListener('click', function() {
+            filterLayers();
+            updateFilterButtonState(this, 'day');
+        });
+        
+        function updateFilterButtonState(button, group) {
+            if (group === 'day') {
+                // Reset all buttons to transparent state
+                const mondayBtn = document.getElementById('filter-mon');
+                const tuesdayBtn = document.getElementById('filter-tue');
+                const allBtn = document.getElementById('filter-all');
+                
+                // Clear all buttons
+                mondayBtn.className = 'btn btn-sm btn-outline-warning';
+                tuesdayBtn.className = 'btn btn-sm btn-outline-info';
+                allBtn.className = 'btn btn-sm btn-outline-secondary';
+                
+                // Apply filled style to the selected button
+                if (button.id === 'filter-mon') {
+                    button.className = 'btn btn-sm btn-warning';
+                } else if (button.id === 'filter-tue') {
+                    button.className = 'btn btn-sm btn-info';
+                } else if (button.id === 'filter-all') {
+                    button.className = 'btn btn-sm btn-secondary';
+                }
+            }
+        }
+        
+        // Add click events to ZIP list items
+        document.querySelectorAll('.zip-list-item').forEach(item => {
+            item.addEventListener('click', function(e) {
+                e.preventDefault();
+                
+                // Highlight this item
+                highlightZipInList(this.dataset.zip);
+                
+                // Find the associated ZIP in our layers
+                const zipCode = this.dataset.zip;
+                const zipPolygon = allZipLayers.find(z => z.zipCode === zipCode);
+                const zipMarker = allMarkers.find(m => m.zipCode === zipCode);
+                
+                if (zipPolygon) {
+                    // Center on polygon and show popup
+                    map.fitBounds(zipPolygon.layer.getBounds(), { padding: [50, 50], maxZoom: 13 });
+                    zipPolygon.layer.openPopup();
+                } else if (zipMarker) {
+                    // Center on marker and show popup
+                    map.setView(zipMarker.marker.getLatLng(), 13);
+                    zipMarker.marker.openPopup();
+                }
+            });
+        });
+        
+        // Handle expand/collapse all button
+        const expandAllBtn = document.getElementById('expandAllBtn');
+        let isExpanded = false;
+        
+        expandAllBtn.addEventListener('click', function() {
+            const accordionButtons = document.querySelectorAll('.accordion-button');
+            const accordionItems = document.querySelectorAll('.accordion-collapse');
+            
+            if (isExpanded) {
+                // Collapse all
+                accordionItems.forEach(item => {
+                    item.classList.remove('show');
+                });
+                accordionButtons.forEach(btn => {
+                    btn.classList.add('collapsed');
+                    btn.setAttribute('aria-expanded', 'false');
+                });
+                expandAllBtn.textContent = 'Expand All';
+            } else {
+                // Expand all
+                accordionItems.forEach(item => {
+                    item.classList.add('show');
+                });
+                accordionButtons.forEach(btn => {
+                    btn.classList.remove('collapsed');
+                    btn.setAttribute('aria-expanded', 'true');
+                });
+                expandAllBtn.textContent = 'Collapse All';
+            }
+            
+            isExpanded = !isExpanded;
+        });
+    });
+</script>
+{% endblock %} 

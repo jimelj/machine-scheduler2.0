@@ -626,6 +626,123 @@ def operator_report(machine_id):
         report_date=datetime.now().strftime("%Y-%m-%d %H:%M")
     )
 
+@app.route('/view_zip_map')
+@app.route('/view_zip_map/<int:machine_id>')
+def view_zip_map(machine_id=None):
+    """View ZIP codes on a map."""
+    try:
+        with open(os.path.join(app.config['UPLOAD_FOLDER'], 'schedule_result.json'), 'r') as f:
+            schedule_result = json.load(f)
+        
+        # Load the original data files for segments and insert counts
+        with open(os.path.join(app.config['UPLOAD_FOLDER'], 'session.json'), 'r') as f:
+            session_data = json.load(f)
+            
+        # Load the orders file to get segment data
+        orders_df = pd.read_csv(session_data['insert_orders_path']) 
+        
+        # Filter for CBA LONG ISLAND
+        cba_orders = orders_df[orders_df['DistributorName'] == 'CBA LONG ISLAND'].copy()
+        
+        # Extract ZIP code from ZipRoute (first 5 digits)
+        cba_orders['ZipCode'] = cba_orders['ZipRoute'].astype(str).str[:5]
+        
+        # Keep the full ZipRoute with segments (e.g., 11040A)
+        cba_orders['ZipRouteWithSegment'] = cba_orders['ZipRoute']
+        
+        # Group by ZIP code to get all segments for each ZIP
+        zip_segments = cba_orders.groupby('ZipCode')['ZipRouteWithSegment'].unique().to_dict()
+        
+        # Count unique inserts per ZIP code
+        insert_counts = {}
+        for zip_code, group in cba_orders.groupby('ZipCode'):
+            if 'CombinedStoreName' in group.columns:
+                unique_inserts = group['CombinedStoreName'].dropna().unique()
+                insert_counts[zip_code] = len(unique_inserts)
+            else:
+                # Fallback if CombinedStoreName doesn't exist
+                unique_inserts = group['AdvertiserAccount'].dropna().unique()
+                insert_counts[zip_code] = len(unique_inserts)
+    except Exception as e:
+        print(f"Error loading additional data: {str(e)}")
+        zip_segments = {}
+        insert_counts = {}
+        
+    try:
+        # Continue with the original function
+        with open(os.path.join(app.config['UPLOAD_FOLDER'], 'schedule_result.json'), 'r') as f:
+            schedule_result = json.load(f)
+    except FileNotFoundError:
+        flash('No schedule has been generated yet')
+        return redirect(url_for('schedule'))
+    
+    # Collect all ZIP codes from all machines
+    all_zips = []
+    machine_names = {}
+    
+    # Always gather all machine names first, regardless of the machine_id filter
+    for idx, machine in enumerate(schedule_result['machines']):
+        machine_id_num = idx + 1
+        machine_names[machine_id_num] = machine['name']
+    
+    if machine_id is not None:
+        # Get zips for a specific machine
+        machine_index = machine_id - 1  # Convert from 1-based to 0-based index
+        
+        if machine_index < 0 or machine_index >= len(schedule_result['machines']):
+            flash('Invalid machine ID')
+            return redirect(url_for('view_schedule'))
+        
+        machine_data = schedule_result['machines'][machine_index]
+        
+        for i, zip_data in enumerate(machine_data['zips']):
+            zip_code = zip_data['zip_code']
+            
+            # Get segments for this ZIP code if available
+            segments = []
+            if zip_code in zip_segments:
+                segments = [seg for seg in zip_segments[zip_code] if seg]
+            
+            all_zips.append({
+                'zip_code': zip_code,
+                'machine_id': machine_id,
+                'machine_name': machine_data['name'],
+                'sequence': i + 1,  # Use position index + 1 as sequence number
+                'mailday': zip_data.get('mailday', ''),
+                'segments': segments,
+                'insert_count': insert_counts.get(zip_code, 0)
+            })
+    else:
+        # Get all zips from all machines
+        for idx, machine in enumerate(schedule_result['machines']):
+            machine_id_num = idx + 1
+            
+            for i, zip_data in enumerate(machine['zips']):
+                zip_code = zip_data['zip_code']
+                
+                # Get segments for this ZIP code if available
+                segments = []
+                if zip_code in zip_segments:
+                    segments = [seg for seg in zip_segments[zip_code] if seg]
+                
+                all_zips.append({
+                    'zip_code': zip_code,
+                    'machine_id': machine_id_num,
+                    'machine_name': machine['name'],
+                    'sequence': i + 1,  # Use position index + 1 as sequence number
+                    'mailday': zip_data.get('mailday', ''),
+                    'segments': segments,
+                    'insert_count': insert_counts.get(zip_code, 0)
+                })
+    
+    return render_template(
+        'zip_map.html',
+        zips=all_zips,
+        machine_id=machine_id,
+        machine_names=machine_names,
+        title="All ZIP Codes" if machine_id is None else f"ZIP Codes for {machine_names[machine_id]}"
+    )
+
 if __name__ == '__main__':
     with app.app_context():
         db.create_all()
