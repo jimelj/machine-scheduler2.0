@@ -221,6 +221,7 @@
                                                         <tr>
                                                             <th>ZIP Code</th>
                                                             <th>Delivery Day</th>
+                                                            <th>Postal</th>
                                                             <th>Segments</th>
                                                             <th>Insert Count</th>
                                                         </tr>
@@ -241,6 +242,7 @@
                                                                 <span class="badge bg-secondary">{{ zip.mailday }}</span>
                                                                 {% endif %}
                                                             </td>
+                                                            <td>{{ zip.postal }}</td>
                                                             <td>
                                                                 {% if zip.segments %}
                                                                     {% for segment in zip.segments %}
@@ -279,6 +281,7 @@
                                                 <tr>
                                                     <th>ZIP Code</th>
                                                     <th>Delivery Day</th>
+                                                    <th>Postal</th>
                                                     <th>Segments</th>
                                                     <th>Insert Count</th>
                                                 </tr>
@@ -299,6 +302,7 @@
                                                         <span class="badge bg-secondary">{{ zip.mailday }}</span>
                                                         {% endif %}
                                                     </td>
+                                                    <td>{{ zip.postal }}</td>
                                                     <td>
                                                         {% if zip.segments %}
                                                             {% for segment in zip.segments %}
@@ -419,6 +423,7 @@
                             <strong>Sequence:</strong> ${zipInfo.sequence || 'N/A'}<br>
                             <strong>Delivery Day:</strong> ${zipInfo.mailday === 'MON' ? 'Monday' : 
                                                            zipInfo.mailday === 'TUE' ? 'Tuesday' : 'N/A'}<br>
+                            <strong>Postal:</strong> ${zipInfo.postal || 'N/A'}<br>
                             <strong>Insert Count:</strong> ${zipInfo.insert_count || '0'}<br>
                             <strong>Segments:</strong> ${segmentsHtml}
                         </div>
@@ -542,6 +547,7 @@
                             <strong>Sequence:</strong> ${zipInfo.sequence || 'N/A'}<br>
                             <strong>Delivery Day:</strong> ${zipInfo.mailday === 'MON' ? 'Monday' : 
                                                            zipInfo.mailday === 'TUE' ? 'Tuesday' : 'N/A'}<br>
+                            <strong>Postal:</strong> ${zipInfo.postal || 'N/A'}<br>
                             <strong>Insert Count:</strong> ${zipInfo.insert_count || '0'}<br>
                             <strong>Segments:</strong> ${segmentsHtml}
                         </div>

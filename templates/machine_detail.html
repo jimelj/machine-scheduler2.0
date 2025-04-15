@@ -312,6 +312,9 @@
                     <div>
                         <strong>Delivery Day:</strong> <span id="deliveryDay" class="delivery-day-label">-</span>
                     </div>
+                    <div>
+                        <strong>Postal:</strong> <span id="postalInfo" class="postal-info">-</span>
+                    </div>
                 </div>
                 
                 <div class="change-instructions">
@@ -590,6 +593,14 @@
             } else {
                 deliveryDay.textContent = '-';
                 deliveryDay.className = 'delivery-day-label';
+            }
+            
+            // Update postal info
+            const postalInfo = document.getElementById('postalInfo');
+            if (assignment && assignment.postal) {
+                postalInfo.textContent = assignment.postal;
+            } else {
+                postalInfo.textContent = '-';
             }
             
             // Update change instructions

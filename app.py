@@ -181,6 +181,27 @@ def machine_detail(machine_id):
         flash('Invalid machine ID')
         return redirect(url_for('view_schedule'))
     
+    # Load the Zips by Address File Group to get ratedesc (Postal) data
+    try:
+        with open(os.path.join(app.config['UPLOAD_FOLDER'], 'session.json'), 'r') as f:
+            session_data = json.load(f)
+        
+        # Load the zips file to get postal (ratedesc) data
+        zips_df = pd.read_excel(session_data['zips_path'])
+        
+        # Convert zip to string for consistent matching
+        if 'zip' in zips_df.columns:
+            zips_df['zip'] = zips_df['zip'].astype(str)
+        
+        # Create a dictionary for quick lookup of ratedesc by ZIP code
+        ratedesc_by_zip = {}
+        if 'zip' in zips_df.columns and 'ratedesc' in zips_df.columns:
+            for _, row in zips_df.iterrows():
+                ratedesc_by_zip[str(row['zip']).strip()] = row['ratedesc']
+    except Exception as e:
+        print(f"Error loading Zips by Address File Group: {str(e)}")
+        ratedesc_by_zip = {}
+    
     machine_data = schedule_result['machines'][machine_index]
     
     # Debug print statements for segments
@@ -202,6 +223,10 @@ def machine_detail(machine_id):
         segments = zip_data.get('segments', [])
         inserts_reused = zip_data.get('inserts_reused', 0)
         print(f"ZIP {zip_data['zip_code']}: {len(segments)} segments - {segments}, inserts_reused: {inserts_reused}")
+        
+        # Add postal information (ratedesc) to each ZIP data
+        zip_code = zip_data['zip_code']
+        zip_data['postal'] = ratedesc_by_zip.get(zip_code, '')
     
     # Calculate total inserts for this machine
     total_machine_inserts = 0
@@ -641,6 +666,19 @@ def view_zip_map(machine_id=None):
         # Load the orders file to get segment data
         orders_df = pd.read_csv(session_data['insert_orders_path']) 
         
+        # Load the Zips by Address File Group to get ratedesc (Postal) data
+        zips_df = pd.read_excel(session_data['zips_path'])
+        
+        # Convert zip to string for consistent matching
+        if 'zip' in zips_df.columns:
+            zips_df['zip'] = zips_df['zip'].astype(str)
+        
+        # Create a dictionary for quick lookup of ratedesc by ZIP code
+        ratedesc_by_zip = {}
+        if 'zip' in zips_df.columns and 'ratedesc' in zips_df.columns:
+            for _, row in zips_df.iterrows():
+                ratedesc_by_zip[str(row['zip']).strip()] = row['ratedesc']
+        
         # Filter for CBA LONG ISLAND
         cba_orders = orders_df[orders_df['DistributorName'] == 'CBA LONG ISLAND'].copy()
         
@@ -667,6 +705,7 @@ def view_zip_map(machine_id=None):
         print(f"Error loading additional data: {str(e)}")
         zip_segments = {}
         insert_counts = {}
+        ratedesc_by_zip = {}
         
     try:
         # Continue with the original function
@@ -710,7 +749,8 @@ def view_zip_map(machine_id=None):
                 'sequence': i + 1,  # Use position index + 1 as sequence number
                 'mailday': zip_data.get('mailday', ''),
                 'segments': segments,
-                'insert_count': insert_counts.get(zip_code, 0)
+                'insert_count': insert_counts.get(zip_code, 0),
+                'postal': ratedesc_by_zip.get(zip_code, '')  # Add the ratedesc as "postal"
             })
     else:
         # Get all zips from all machines
@@ -732,7 +772,8 @@ def view_zip_map(machine_id=None):
                     'sequence': i + 1,  # Use position index + 1 as sequence number
                     'mailday': zip_data.get('mailday', ''),
                     'segments': segments,
-                    'insert_count': insert_counts.get(zip_code, 0)
+                    'insert_count': insert_counts.get(zip_code, 0),
+                    'postal': ratedesc_by_zip.get(zip_code, '')  # Add the ratedesc as "postal"
                 })
     
     return render_template(
