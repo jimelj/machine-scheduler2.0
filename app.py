@@ -98,21 +98,41 @@ def schedule():
     
     if request.method == 'POST':
         # Get scheduling parameters
-        day = request.form.get('day', None)
-        if day == 'all':
-            day = None
+        schedule_type = request.form.get('schedule_type', 'delivery_day')
         
         try:
             # Run the scheduling algorithm
             output_path = os.path.join(app.config['UPLOAD_FOLDER'], 'schedule_result.json')
             
-            # Use run_scheduling to handle the day filter correctly
-            schedule_result = run_scheduling(
-                session_data['zips_path'],
-                session_data['insert_orders_path'],
-                day=day,
-                output_file_path=output_path
-            )
+            if schedule_type == 'delivery_day':
+                # Use the original delivery day scheduling method
+                schedule_result = run_scheduling(
+                    session_data['zips_path'],
+                    session_data['insert_orders_path'],
+                    day=None,  # Schedule all days
+                    output_file_path=output_path
+                )
+            elif schedule_type == 'postal':
+                # Use the new postal facility scheduling method
+                schedule_result = run_scheduling(
+                    session_data['zips_path'],
+                    session_data['insert_orders_path'],
+                    day=None,
+                    output_file_path=output_path,
+                    postal_scheduling=True  # Enable postal scheduling
+                )
+            elif schedule_type == 'mayhem':
+                # Use the new mayhem mode scheduling method
+                schedule_result = run_scheduling(
+                    session_data['zips_path'],
+                    session_data['insert_orders_path'],
+                    day=None,
+                    output_file_path=output_path,
+                    mayhem_scheduling=True  # Enable mayhem scheduling
+                )
+            else:
+                flash('Invalid scheduling method selected')
+                return redirect(request.url)
             
             # Read the generated schedule
             with open(output_path, 'r') as f:
@@ -181,6 +201,9 @@ def machine_detail(machine_id):
         flash('Invalid machine ID')
         return redirect(url_for('view_schedule'))
     
+    # Get scheduling method
+    scheduling_method = schedule_result.get('statistics', {}).get('scheduling_method', 'Delivery Day')
+    
     # Load the Zips by Address File Group to get ratedesc (Postal) data
     try:
         with open(os.path.join(app.config['UPLOAD_FOLDER'], 'session.json'), 'r') as f:
@@ -226,7 +249,16 @@ def machine_detail(machine_id):
         
         # Add postal information (ratedesc) to each ZIP data
         zip_code = zip_data['zip_code']
-        zip_data['postal'] = ratedesc_by_zip.get(zip_code, '')
+        postal_type = zip_data.get('postal_type', '')
+        
+        # If no postal_type in ZIP data, try to get it from the ratedesc_by_zip
+        if not postal_type and zip_code in ratedesc_by_zip:
+            postal_type = str(ratedesc_by_zip[zip_code]).strip().upper()
+            # Standardize the postal_type (SCF or DDU)
+            if postal_type == 'SCF':
+                zip_data['postal_type'] = 'SCF'
+            else:
+                zip_data['postal_type'] = 'DDU'
     
     # Calculate total inserts for this machine
     total_machine_inserts = 0
@@ -329,7 +361,8 @@ def machine_detail(machine_id):
         machine_name=machine_data['name'],
         assignments=machine_data['zips'],
         total_inserts=total_machine_inserts,
-        pocket_changes=pocket_changes
+        pocket_changes=pocket_changes,
+        schedule_method=scheduling_method
     )
 
 @app.route('/api/schedule')
@@ -659,6 +692,9 @@ def view_zip_map(machine_id=None):
         with open(os.path.join(app.config['UPLOAD_FOLDER'], 'schedule_result.json'), 'r') as f:
             schedule_result = json.load(f)
         
+        # Get scheduling method
+        scheduling_method = schedule_result.get('statistics', {}).get('scheduling_method', 'Delivery Day')
+        
         # Load the original data files for segments and insert counts
         with open(os.path.join(app.config['UPLOAD_FOLDER'], 'session.json'), 'r') as f:
             session_data = json.load(f)
@@ -706,6 +742,7 @@ def view_zip_map(machine_id=None):
         zip_segments = {}
         insert_counts = {}
         ratedesc_by_zip = {}
+        scheduling_method = 'Delivery Day'
         
     try:
         # Continue with the original function
@@ -742,6 +779,15 @@ def view_zip_map(machine_id=None):
             if zip_code in zip_segments:
                 segments = [seg for seg in zip_segments[zip_code] if seg]
             
+            # Determine postal type (SCF/DDU)
+            postal_type = zip_data.get('postal_type', '')
+            if not postal_type and zip_code in ratedesc_by_zip:
+                postal_type_raw = str(ratedesc_by_zip[zip_code]).strip().upper()
+                if postal_type_raw == 'SCF':
+                    postal_type = 'SCF'
+                else:
+                    postal_type = 'DDU'
+            
             all_zips.append({
                 'zip_code': zip_code,
                 'machine_id': machine_id,
@@ -750,7 +796,8 @@ def view_zip_map(machine_id=None):
                 'mailday': zip_data.get('mailday', ''),
                 'segments': segments,
                 'insert_count': insert_counts.get(zip_code, 0),
-                'postal': ratedesc_by_zip.get(zip_code, '')  # Add the ratedesc as "postal"
+                'postal_type': postal_type,
+                'postal': ratedesc_by_zip.get(zip_code, '')  # Keep old postal field for compatibility
             })
     else:
         # Get all zips from all machines
@@ -765,6 +812,15 @@ def view_zip_map(machine_id=None):
                 if zip_code in zip_segments:
                     segments = [seg for seg in zip_segments[zip_code] if seg]
                 
+                # Determine postal type (SCF/DDU)
+                postal_type = zip_data.get('postal_type', '')
+                if not postal_type and zip_code in ratedesc_by_zip:
+                    postal_type_raw = str(ratedesc_by_zip[zip_code]).strip().upper()
+                    if postal_type_raw == 'SCF':
+                        postal_type = 'SCF'
+                    else:
+                        postal_type = 'DDU'
+                
                 all_zips.append({
                     'zip_code': zip_code,
                     'machine_id': machine_id_num,
@@ -773,7 +829,8 @@ def view_zip_map(machine_id=None):
                     'mailday': zip_data.get('mailday', ''),
                     'segments': segments,
                     'insert_count': insert_counts.get(zip_code, 0),
-                    'postal': ratedesc_by_zip.get(zip_code, '')  # Add the ratedesc as "postal"
+                    'postal_type': postal_type,
+                    'postal': ratedesc_by_zip.get(zip_code, '')  # Keep old postal field for compatibility
                 })
     
     return render_template(
@@ -781,6 +838,7 @@ def view_zip_map(machine_id=None):
         zips=all_zips,
         machine_id=machine_id,
         machine_names=machine_names,
+        scheduling_method=scheduling_method,
         title="All ZIP Codes" if machine_id is None else f"ZIP Codes for {machine_names[machine_id]}"
     )
 

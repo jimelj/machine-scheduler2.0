@@ -20,13 +20,13 @@
             <div class="card-body">
                 <form method="POST">
                     <div class="mb-3">
-                        <label for="day" class="form-label">Schedule Day</label>
-                        <select class="form-select" id="day" name="day">
-                            <option value="all" selected>All Days</option>
-                            <option value="MON">Monday Only</option>
-                            <option value="TUE">Tuesday Only</option>
+                        <label for="schedule_type" class="form-label">Scheduling Method</label>
+                        <select class="form-select" id="schedule_type" name="schedule_type">
+                            <option value="delivery_day" selected>Schedule Delivery Day (Scheduled based on Delivery date)</option>
+                            <option value="postal">Schedule by Postal Facility (DDU/SCF)</option>
+                            <option value="mayhem">Mayhem ☠️ (No Logic - Maximum Insert Continuity)</option>
                         </select>
-                        <div class="form-text">Select which day(s) to include in the schedule.</div>
+                        <div class="form-text">Select which method to use for scheduling.</div>
                     </div>
                     <button type="submit" class="btn btn-primary">Generate Schedule</button>
                 </form>

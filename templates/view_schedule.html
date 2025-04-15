@@ -65,6 +65,7 @@
                 <p><strong>Total ZIP Codes:</strong> {{ schedule.statistics.total_zips }}</p>
                 <p><strong>Total Inserts:</strong> <span class="reused-count">{{ schedule.statistics.total_inserts }}</span></p>
                 <p><strong>Schedule Date:</strong> {{ schedule.statistics.date }}</p>
+                <p><strong>Scheduling Method:</strong> {{ schedule.statistics.scheduling_method|default('Delivery Day') }}</p>
                 
                 <div class="text-center mt-3">
                     <a href="{{ url_for('view_zip_map') }}" class="btn btn-info">

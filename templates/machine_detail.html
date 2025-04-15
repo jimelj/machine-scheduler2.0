@@ -165,7 +165,10 @@
     .segment-badge {
         background-color: #17a2b8;
         margin-right: 5px;
-        font-size: 0.85rem;
+        font-size: 1rem;
+        padding: 5px 10px;
+        border-radius: 4px;
+        font-weight: bold;
     }
     
     .day-indicator {
@@ -182,18 +185,41 @@
         background-color: #ffc107;
         color: #333;
         font-weight: bold;
-        padding: 2px 8px;
+        padding: 5px 10px;
         border-radius: 4px;
         display: inline-block;
+        font-size: 1rem;
     }
     
     .day-tue {
         background-color: #17a2b8;
         color: white;
         font-weight: bold;
-        padding: 2px 8px;
+        padding: 5px 10px;
         border-radius: 4px;
         display: inline-block;
+        font-size: 1rem;
+    }
+    
+    /* New styles for postal types */
+    .postal-scf, .zip-badge.postal-scf.active {
+        background-color: #28a745 !important;
+        color: white;
+        font-weight: bold;
+        padding: 5px 10px;
+        border-radius: 4px;
+        display: inline-block;
+        font-size: 1rem;
+    }
+    
+    .postal-ddu, .zip-badge.postal-ddu.active {
+        background-color: #a17dc3 !important;
+        color: white;
+        font-weight: bold;
+        padding: 5px 10px;
+        border-radius: 4px;
+        display: inline-block;
+        font-size: 1rem;
     }
     
     .current-zip-info {
@@ -205,9 +231,9 @@
     }
     
     .delivery-day-label {
-        font-size: 1.1rem;
+        font-size: 1rem;
         margin-top: 10px;
-        padding: 5px 15px;
+        padding: 5px 10px;
         display: inline-block;
         border-radius: 4px;
     }
@@ -254,12 +280,21 @@
                 
                 <div class="zip-sequence text-center">
                     {% for zip in assignments %}
-                        <span class="badge {% if zip.mailday == 'MON' %}bg-warning text-dark{% elif zip.mailday == 'TUE' %}bg-info text-white{% else %}bg-secondary{% endif %} zip-badge" 
-                              data-zip="{{ zip.zip_code }}" 
-                              data-sequence="{{ loop.index }}">
-                            {{ zip.zip_code }}
-                            <span class="reused-badge">({{ zip.inserts_reused }} reused)</span>
-                        </span>
+                        {% if schedule_method == 'Postal Facility (SCF/DDU)' %}
+                            <span class="badge {% if zip.postal_type == 'SCF' %}postal-scf{% elif zip.postal_type == 'DDU' %}postal-ddu{% else %}bg-secondary{% endif %} zip-badge" 
+                                  data-zip="{{ zip.zip_code }}" 
+                                  data-sequence="{{ loop.index }}">
+                                {{ zip.zip_code }}
+                                <span class="reused-badge">({{ zip.inserts_reused }} reused)</span>
+                            </span>
+                        {% else %}
+                            <span class="badge {% if zip.mailday == 'MON' %}bg-warning text-dark{% elif zip.mailday == 'TUE' %}bg-info text-white{% else %}bg-secondary{% endif %} zip-badge" 
+                                  data-zip="{{ zip.zip_code }}" 
+                                  data-sequence="{{ loop.index }}">
+                                {{ zip.zip_code }}
+                                <span class="reused-badge">({{ zip.inserts_reused }} reused)</span>
+                            </span>
+                        {% endif %}
                     {% endfor %}
                 </div>
             </div>
@@ -342,6 +377,7 @@
             console.log(`ZIP ${assignment.zip_code} segments:`, assignment.segments ? assignment.segments : "No segments");
             console.log(`ZIP ${assignment.zip_code} inserts_reused:`, assignment.inserts_reused);
             console.log(`ZIP ${assignment.zip_code} mailday:`, assignment.mailday || "No mailday");
+            console.log(`ZIP ${assignment.zip_code} postal_type:`, assignment.postal_type || "No postal type");
         });
         
         // Sort assignments by sequence
@@ -349,6 +385,9 @@
         
         // Initialize variables
         let currentZipIndex = 0;
+        
+        // Get scheduling method
+        const schedulingMethod = '{{ schedule_method }}';
         
         // Function to generate pocket changes based on assignments
         function generatePocketChanges() {
@@ -597,8 +636,20 @@
             
             // Update postal info
             const postalInfo = document.getElementById('postalInfo');
-            if (assignment && assignment.postal) {
-                postalInfo.textContent = assignment.postal;
+            if (assignment && assignment.postal_type) {
+                const postalType = assignment.postal_type.toUpperCase().trim();
+                postalInfo.innerHTML = '';
+                
+                const badge = document.createElement('span');
+                if (postalType === 'SCF') {
+                    badge.className = 'badge postal-scf';
+                } else if (postalType === 'DDU') {
+                    badge.className = 'badge postal-ddu';
+                } else {
+                    badge.className = 'badge bg-secondary';
+                }
+                badge.textContent = postalType;
+                postalInfo.appendChild(badge);
             } else {
                 postalInfo.textContent = '-';
             }
@@ -608,20 +659,37 @@
             
             // Update ZIP badges
             document.querySelectorAll('.zip-badge').forEach(badge => {
+                // Check if this is a postal-type badge
+                const isPostalBadge = badge.classList.contains('postal-scf') || badge.classList.contains('postal-ddu');
+                // Check if this is a delivery day badge
+                const isDayBadge = badge.classList.contains('bg-warning') || badge.classList.contains('bg-info');
+                
                 if (badge.dataset.zip === zipCode) {
+                    // Add active class
                     badge.classList.add('active');
-                    badge.classList.remove('bg-secondary');
-                    badge.classList.add('bg-success');
                     
-                    // Update the inserts reused count in the badge to match the actual calculation
+                    // Remove secondary bg if present
+                    badge.classList.remove('bg-secondary');
+                    
+                    // Only add success bg if not a postal or day badge
+                    if (!isPostalBadge && !isDayBadge) {
+                        badge.classList.add('bg-success');
+                    }
+                    
+                    // Update the inserts reused count in the badge
                     const reusedBadge = badge.querySelector('.reused-badge');
                     if (reusedBadge) {
                         reusedBadge.textContent = `(${insertsReused} reused)`;
                     }
                 } else {
+                    // Not the current ZIP, remove active status
                     badge.classList.remove('active');
                     badge.classList.remove('bg-success');
-                    badge.classList.add('bg-secondary');
+                    
+                    // Only add secondary bg if not a postal or day badge
+                    if (!isPostalBadge && !isDayBadge) {
+                        badge.classList.add('bg-secondary');
+                    }
                 }
             });
         }
